@@ -14,7 +14,8 @@ from fastapi.responses import FileResponse
 import backend.jobs as jobs
 from backend.models import JobStatus
 
-load_dotenv()
+_PROJECT_ROOT = Path(__file__).parent.parent
+load_dotenv(_PROJECT_ROOT / ".env")
 
 app = FastAPI(title="Explodify API")
 
@@ -34,10 +35,58 @@ PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "public"
 SAMPLE_OBJ = _FRONTEND_DIR / "sample.obj"
 
+# Pre-rendered sample videos for demo mode (no pipeline required)
+SAMPLE_DIR = Path(__file__).parent.parent / "samples"
+SAMPLE_BASE_VIDEO = SAMPLE_DIR / "base_video.mp4"
+SAMPLE_FINAL_VIDEO = SAMPLE_DIR / "final_video.mp4"
+
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/demo", status_code=201)
+async def create_demo():
+    """Create a demo job pre-loaded with bundled sample videos.
+
+    Skips the full pipeline — copies the sample base_video.mp4 (and
+    final_video.mp4 if present) into a fresh job directory and sets the
+    job to awaiting_approval immediately so the UI review gate is shown.
+    """
+    import shutil
+
+    if not SAMPLE_BASE_VIDEO.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Sample videos not found. Run the e2e test first or add samples/ to the project.",
+        )
+
+    job_id = jobs.create_job()
+    output_dir = UPLOAD_DIR / job_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy(str(SAMPLE_BASE_VIDEO), str(output_dir / "base_video.mp4"))
+    if SAMPLE_FINAL_VIDEO.exists():
+        shutil.copy(str(SAMPLE_FINAL_VIDEO), str(output_dir / "final_video.mp4"))
+
+    # Mark phases 1-3 done so /base_video endpoint allows serving
+    jobs.update_phase(job_id, 1, "done")
+    jobs.update_phase(job_id, 2, "done")
+    jobs.update_phase(job_id, 3, "done")
+
+    # Start a lightweight background task that just waits for approval
+    asyncio.create_task(_demo_pipeline(job_id, has_styled=SAMPLE_FINAL_VIDEO.exists()))
+
+    return {"job_id": job_id}
+
+
+async def _demo_pipeline(job_id: str, has_styled: bool) -> None:
+    """Wait for user approval, then mark done (sample videos already in place)."""
+    approval_event = jobs.mark_awaiting_approval(job_id)
+    await approval_event.wait()
+    jobs.update_phase(job_id, 4, "done")
+    jobs.mark_done(job_id, None)
 
 
 @app.get("/preview/sample")
@@ -326,7 +375,7 @@ async def _run_pipeline(
             import logging
             logging.warning("FAL_KEY not set; skipping Phase 4 Kling edit")
             jobs.update_phase(job_id, 4, "done")
-            jobs.mark_done(job_id, None)
+            jobs.mark_done(job_id, ai_styled=False)
             return
 
         jobs.update_phase(job_id, 4, "running")
@@ -353,7 +402,7 @@ async def _run_pipeline(
         )
         jobs.update_phase(job_id, 4, "done")
 
-        jobs.mark_done(job_id, None)
+        jobs.mark_done(job_id, ai_styled=True)
 
     except Exception as exc:
         current_job = jobs.get_job(job_id)
