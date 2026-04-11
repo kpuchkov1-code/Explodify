@@ -27,7 +27,7 @@ _ANGLE_TO_CAM_DIR = {
 
 
 class SnapshotRenderer:
-    """Phase 2: Render 3 PNG keyframes at 0%, 50%, 100% explosion."""
+    """Phase 2: Render 5 PNG keyframes at 0%-100% explosion."""
 
     def render(
         self,
@@ -37,6 +37,7 @@ class SnapshotRenderer:
         output_dir: Path,
         scalar: float,
         source_format: str = "",
+        rotation_offset_deg: float = 0.0,
     ) -> FrameSet:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -49,7 +50,9 @@ class SnapshotRenderer:
             EXPLOSION_FRACTIONS, CAMERA_ANGLES_DEG, FRAME_NAMES
         ):
             exploded = self._apply_explosion(meshes, explosion_vectors, fraction)
-            img = self._render_scene(exploded, cam_dir, orbit_deg)
+            img = self._render_scene(
+                exploded, cam_dir, orbit_deg, up_rotation_deg=rotation_offset_deg
+            )
             out_path = output_dir / f"{name}.png"
             img.save(str(out_path))
             frame_paths.append(out_path)
@@ -90,6 +93,8 @@ class SnapshotRenderer:
         meshes: List[trimesh.Trimesh],
         cam_dir: np.ndarray,
         orbit_deg: float,
+        up_rotation_deg: float = 0.0,
+        resolution: tuple[int, int] | None = None,
     ) -> Image.Image:
         import pyrender
 
@@ -127,11 +132,13 @@ class SnapshotRenderer:
         scale = np.linalg.norm(footprint.max(axis=0) - footprint.min(axis=0))
 
         cam_pos = center + orbited * scale * 2.0
-        cam_pose = _look_at(cam_pos, center)
+        up_hint = _compute_up_vector(orbited, up_rotation_deg)
+        cam_pose = _look_at(cam_pos, center, up_hint=up_hint)
 
+        res = resolution if resolution is not None else RESOLUTION
         cam = pyrender.PerspectiveCamera(
             yfov=np.pi / 4.0,
-            aspectRatio=RESOLUTION[0] / RESOLUTION[1],
+            aspectRatio=res[0] / res[1],
         )
         pr_scene.add(cam, pose=cam_pose)
 
@@ -142,17 +149,58 @@ class SnapshotRenderer:
         fill_light = pyrender.DirectionalLight(color=[0.7, 0.8, 1.0], intensity=2.0)
         pr_scene.add(fill_light, pose=fill_pose)
 
-        renderer = pyrender.OffscreenRenderer(*RESOLUTION)
+        offscreen = pyrender.OffscreenRenderer(*res)
         try:
-            color, _ = renderer.render(pr_scene)
+            color, _ = offscreen.render(pr_scene)
             return Image.fromarray(color)
         finally:
-            renderer.delete()
+            offscreen.delete()
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def render_preview_frame(
+    meshes: List[trimesh.Trimesh],
+    cam_dir: np.ndarray,
+    resolution: tuple[int, int] = (512, 384),
+) -> Image.Image:
+    """Render a single preview frame from the given camera direction.
+
+    Used by orientation_preview to produce the 6-face orientation grid.
+    No explosion applied — meshes are shown fully assembled.
+    """
+    renderer = SnapshotRenderer()
+    return renderer._render_scene(
+        meshes, cam_dir, orbit_deg=0.0, up_rotation_deg=0.0, resolution=resolution
+    )
+
+
+def _compute_up_vector(cam_dir: np.ndarray, rotation_deg: float) -> np.ndarray:
+    """Compute camera up vector rotated around the viewing direction axis.
+
+    A rotation_deg of 0 gives the natural world-up orientation.
+    90 rotates the camera frame 90 degrees clockwise from the viewer's perspective.
+    """
+    axis = cam_dir / np.linalg.norm(cam_dir)
+    world_up = np.array([0.0, 1.0, 0.0])
+    if abs(np.dot(axis, world_up)) > 0.99:
+        world_up = np.array([1.0, 0.0, 0.0])
+    angle = math.radians(rotation_deg)
+    cos_a = math.cos(angle)
+    sin_a = math.sin(angle)
+    # Rodrigues rotation formula: rotate world_up around axis
+    rotated = (
+        world_up * cos_a
+        + np.cross(axis, world_up) * sin_a
+        + axis * np.dot(axis, world_up) * (1.0 - cos_a)
+    )
+    norm = np.linalg.norm(rotated)
+    if norm < 1e-8:
+        return world_up
+    return rotated / norm
+
 
 def _pick_camera_direction(meshes: List[trimesh.Trimesh], master_angle: str) -> np.ndarray:
     """Return a camera unit direction vector based on the master_angle."""
@@ -210,10 +258,17 @@ def _extract_material(mesh: trimesh.Trimesh, idx: int):
     )
 
 
-def _look_at(eye: np.ndarray, target: np.ndarray) -> np.ndarray:
+def _look_at(
+    eye: np.ndarray,
+    target: np.ndarray,
+    up_hint: np.ndarray | None = None,
+) -> np.ndarray:
     forward = target - eye
     forward /= np.linalg.norm(forward)
-    world_up = np.array([0.0, 1.0, 0.0])
+    if up_hint is not None:
+        world_up = up_hint / np.linalg.norm(up_hint)
+    else:
+        world_up = np.array([0.0, 1.0, 0.0])
     if abs(np.dot(forward, world_up)) > 0.99:
         world_up = np.array([1.0, 0.0, 0.0])
     right = np.cross(forward, world_up)
