@@ -18,4 +18,3 @@ class JobStatus(BaseModel):
     current_phase_name: str
     phases: dict[int, PhaseStatus]
     error: Optional[str] = None
-    video_url: Optional[str] = None  # set when status == "done"

@@ -1,6 +1,5 @@
 # backend/jobs.py
 import uuid
-from pathlib import Path
 
 from backend.models import JobStatus, PhaseStatus
 
@@ -13,8 +12,6 @@ PHASE_NAMES = {
 
 # In-memory store: job_id → JobStatus
 _jobs: dict[str, JobStatus] = {}
-# In-memory store: job_id → output video path
-_video_paths: dict[str, Path] = {}
 
 
 def create_job() -> str:
@@ -33,10 +30,6 @@ def get_job(job_id: str) -> JobStatus | None:
     return _jobs.get(job_id)
 
 
-def get_video_path(job_id: str) -> Path | None:
-    return _video_paths.get(job_id)
-
-
 def update_phase(job_id: str, phase: int, status: PhaseStatus | str) -> None:
     job = _jobs[job_id]
     phase_status = PhaseStatus(status) if isinstance(status, str) else status
@@ -49,13 +42,10 @@ def update_phase(job_id: str, phase: int, status: PhaseStatus | str) -> None:
         current_phase_name=PHASE_NAMES[phase],
         phases=new_phases,
         error=job.error,
-        video_url=job.video_url,
     )
 
 
-def mark_done(job_id: str, video_path: Path) -> None:
-    job = _jobs[job_id]
-    _video_paths[job_id] = video_path
+def mark_done(job_id: str, _unused: None = None) -> None:
     new_phases = {i: PhaseStatus.done for i in range(1, 5)}
     _jobs[job_id] = JobStatus(
         job_id=job_id,
@@ -63,7 +53,6 @@ def mark_done(job_id: str, video_path: Path) -> None:
         current_phase=4,
         current_phase_name=PHASE_NAMES[4],
         phases=new_phases,
-        video_url=f"/jobs/{job_id}/video",
     )
 
 

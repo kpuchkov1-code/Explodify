@@ -8,49 +8,51 @@
 
 ## The Idea
 
-Product teams spend thousands on Blender artists to produce exploded-view ads for hardware products. Explodify eliminates that bottleneck: upload a `.step` / `.glb` / `.obj` file, receive a studio-grade animated MP4 in minutes.
+Product teams spend thousands on Blender artists to produce exploded-view ads for hardware products. Explodify eliminates that bottleneck: upload a `.step` / `.glb` / `.obj` file, choose your orientation, and receive studio-grade animated keyframes in minutes.
 
-The key insight is a **geometric-first** approach: rather than asking an AI to "guess" how parts come apart, we use Trimesh to compute the mathematically correct explosion vectors and optimal viewing angle, then use those precise snapshots as anchors for AI stylization and video interpolation. The AI never has to invent geometry it cannot see.
+The key insight is a **geometric-first** approach: rather than asking an AI to "guess" how parts come apart, we use Trimesh to compute mathematically correct explosion vectors and a user-confirmed viewing angle, then use those precise snapshots as anchors for AI stylization and video interpolation. The AI never has to invent geometry it cannot see.
 
 ---
 
-## Pipeline (4 Phases)
+## Pipeline
 
 ```
 CAD file (.step / .glb / .obj / .stl / .ply / .3mf)
     │
     ▼
-Phase 1: Geometric Analysis (Trimesh + cascadio)
+Orientation Preview  (POST /preview)
+    │  • Load assembly; render 6 orthographic screenshots
+    │    (front / back / left / right / top / bottom)
+    │  • Return base64 PNGs + preview_id (file cached server-side)
+    │  • User selects the "front" face and corrects roll (0°/90°/180°/270°)
+    ▼
+Phase 1: Geometric Analysis  (Trimesh + cascadio)
     │  • Load assembly; identify individual mesh components
     │  • Reorient: rotate longest axis to vertical (Y-up)
-    │  • Ray-cast from 6 cardinal directions (Top/Bottom/Left/Right/Front/Back)
-    │    — grid spans the actual per-direction footprint, not a global max
-    │  • Select "Master Angle" = direction hitting most unique mesh IDs
     │  • Compute global centroid; per-component explosion vectors:
-    │      v⃗ = centroid_component − centroid_assembly
-    │  • Apply scalar E to get positions at 50% and 100% explosion
+    │      v⃗ = centroid_component − centroid_assembly × scalar
     ▼
-Phase 2: Structural Snapshots (pyrender)
-    │  • Camera distance based on 2D view-plane footprint (not 3D diagonal)
-    │  • Export 3 clean PNG frames:
-    │      Frame A (0%  explosion, 0°  camera) — assembled
-    │      Frame B (50% explosion, 15° camera) — mid-explode
-    │      Frame C (100% explosion, 30° camera) — fully exploded
+Phase 2: Structural Snapshots  (pyrender)
+    │  • Camera placed along user-selected face direction
+    │  • Camera up-vector rotated by user roll offset (Rodrigues rotation)
+    │  • Camera distance based on 2D view-plane footprint (correct zoom for any aspect ratio)
+    │  • Export 5 clean PNG frames at 0° orbit with 10° incremental orbit per step:
+    │      Frame A (0%   explosion, 0°  camera) — assembled
+    │      Frame B (25%  explosion, 10° camera)
+    │      Frame C (50%  explosion, 20° camera) — mid-explode
+    │      Frame D (75%  explosion, 30° camera)
+    │      Frame E (100% explosion, 40° camera) — fully exploded
     ▼
-Phase 3: AI Stylization (Gemini Flash — Google Deepmind)
-    │  • Feed each PNG into Gemini Flash image_edit
-    │  • Seed prompt: "High-end industrial design render, Blender Cycles,
-    │    studio lighting, brushed aluminum and polycarbonate materials,
-    │    clean white background."
-    │  • Output: 3 photorealistic keyframes preserving exact geometry
+Output: 5 raw PNG keyframes served via GET /jobs/{id}/frames/{frame_name}
+
+── Phases 3 & 4 (planned) ──────────────────────────────────────────────────
+Phase 3: AI Stylization  (Gemini Flash — Google Deepmind)
+    │  • Image-to-image: photorealistic product render preserving exact geometry
     ▼
-Phase 4: Video Synthesis (fal.ai)
-    │  • Upload 3 stylized keyframes to fal.ai video model
-    │  • Use Start / Middle / End frame anchoring
-    │    (forces AI to respect Trimesh-calculated geometry at 50% mark)
-    │  • Export final MP4
+Phase 4: Video Synthesis  (fal.ai Kling v2)
+    │  • Keyframe-anchored interpolation across all 5 frames → 4 stitched clips
     ▼
-Output: studio-grade exploded-view animation
+Output: studio-grade exploded-view animation (.mp4)
 ```
 
 ---
@@ -71,7 +73,7 @@ Output: studio-grade exploded-view animation
 
 | Situation | Error | Fix |
 |-----------|-------|-----|
-| STEP exported as a single solid (no assembly tree) | `>100 components` error | Re-export with assembly structure enabled (see table above) |
+| STEP exported as a single solid (no assembly tree) | `>100 components` error | Re-export with assembly structure enabled |
 | Proprietary formats (`.sldasm`, `.sldprt`, `.f3d`, `.ipt`) | Unsupported format error | Export to STEP or GLB from your CAD tool |
 | More than 100 components after loading | `>100 components` error | File was tessellated per-face; re-export with assembly structure |
 
@@ -84,15 +86,44 @@ Output: studio-grade exploded-view animation
 
 ---
 
-## Example Output Frames
+## API Reference
 
-The pipeline produces 3 keyframes for every input:
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Liveness check |
+| `GET` | `/preview/sample` | Render 6 orientation views of the bundled sample model |
+| `POST` | `/preview` | Upload a CAD file; receive 6 face screenshots + `preview_id` |
+| `POST` | `/jobs` | Create explode job from `preview_id` + `master_angle` + `rotation_offset_deg` |
+| `GET` | `/jobs/{id}` | Poll job status (queued / running / done / error) |
+| `GET` | `/jobs/{id}/frames/{name}` | Fetch a rendered keyframe PNG (`frame_a` … `frame_e`) |
 
-| Frame A — Assembled | Frame B — Mid-explode | Frame C — Fully exploded |
-|---|---|---|
-| 0% explosion, 0° orbit | 50% explosion, 15° orbit | 100% explosion, 30° orbit |
+### POST /preview
 
-These are fed into Phases 3 and 4 for AI stylization and video synthesis.
+```json
+// Response
+{
+  "preview_id": "uuid",
+  "images": {
+    "front": "data:image/png;base64,...",
+    "back":  "data:image/png;base64,...",
+    "left":  "data:image/png;base64,...",
+    "right": "data:image/png;base64,...",
+    "top":   "data:image/png;base64,...",
+    "bottom":"data:image/png;base64,..."
+  }
+}
+```
+
+### POST /jobs
+
+```
+Form fields:
+  preview_id         string   (from /preview — file reused, no re-upload)
+  master_angle       string   front | back | left | right | top | bottom
+  rotation_offset_deg float   0 | 90 | 180 | 270  (camera roll correction)
+  explode_scalar     float    default 1.5
+  style_prompt       string   optional aesthetic hint (for future Phase 3)
+```
 
 ---
 
@@ -100,11 +131,11 @@ These are fed into Phases 3 and 4 for AI stylization and video synthesis.
 
 | Problem | Solution |
 |---------|----------|
-| AI invents geometry it cannot see | Trimesh snapshots give it exact views at 0%, 50%, 100% |
-| Camera path is inconsistent | We rotate before handing to AI, so it interpolates known views |
-| Wrong viewing angle for consumer POV | Ray-casting finds the angle that exposes the most components |
+| AI invents geometry it cannot see | Trimesh snapshots anchor AI to exact views at 0–100% |
+| Wrong viewing angle for consumer POV | User manually confirms orientation before rendering begins |
+| Camera path is inconsistent | Rodrigues rotation applies user roll to camera up-vector exactly |
 | Model exported sideways | Longest-axis reorientation aligns the assembly upright before rendering |
-| Stylized frames drift visually | Single seed prompt used consistently across all 3 keyframes |
+| Stylized frames drift visually | Single seed prompt used consistently across all 5 keyframes |
 
 ---
 
@@ -114,85 +145,101 @@ These are fed into Phases 3 and 4 for AI stylization and video synthesis.
 |-------|-----------|---------|
 | STEP loading | [cascadio](https://github.com/OpenCASCADE/cascadio) (OpenCASCADE) | STEP → GLB conversion preserving assembly structure |
 | Geometry | [Trimesh](https://trimesh.org/) | Assembly analysis, explosion vectors, ray-casting |
-| Rendering | [pyrender](https://pyrender.readthedocs.io/) | Headless PNG snapshot export |
-| AI Stylization | [Gemini Flash](https://deepmind.google/) (Google Deepmind) | Image-to-image photorealistic render |
-| Video Synthesis | [fal.ai](https://fal.ai/) | Keyframe-anchored video interpolation |
-| Backend | Python 3.11+ | Pipeline orchestration |
-| Frontend | React + FastAPI | Web upload UI, progress tracking, video preview |
+| Rendering | [pyrender](https://pyrender.readthedocs.io/) | Headless PNG snapshot export (orientation preview + keyframes) |
+| Backend | Python 3.11 + FastAPI | Pipeline orchestration, job queue, file serving |
+| AI Stylization *(planned)* | Gemini Flash (Google Deepmind) | Image-to-image photorealistic render |
+| Video Synthesis *(planned)* | fal.ai Kling v2 | Keyframe-anchored video interpolation |
 
 ---
 
-## Quickstart (CLI)
+## Quickstart
 
 ```bash
 git clone https://github.com/kpuchkov1-code/Explodify.git
 cd Explodify
 pip install -r requirements.txt
 
-# STEP assembly (recommended for multi-part CAD)
-python explodify.py --input your_assembly.step --explode 1.5
+# Run the backend
+PYTHONPATH=. uvicorn backend.main:app --port 8000
 
-# Tinkercad OBJ export
-python explodify.py --input tinker.obj --explode 1.5
+# Render 6 orientation previews for a file
+curl -X POST http://localhost:8000/preview \
+  -F "file=@your_assembly.obj" | python3 -c "
+import sys, json, base64
+d = json.load(sys.stdin)
+print('preview_id:', d['preview_id'])
+for face, uri in d['images'].items():
+    open(f'preview_{face}.png', 'wb').write(base64.b64decode(uri.split(',')[1]))
+print('Saved 6 face PNGs')
+"
 
-# GLB with custom style and output path
-python explodify.py --input assembly.glb --explode 2.0 \
-  --style-prompt "Dark marble, dramatic rim lighting" \
-  --output output/exploded.mp4
+# Create a job from the preview (pick master_angle from your preferred face)
+curl -X POST http://localhost:8000/jobs \
+  -F "preview_id=<preview_id>" \
+  -F "master_angle=front" \
+  -F "rotation_offset_deg=0" \
+  -F "explode_scalar=1.5"
+
+# Poll status
+curl http://localhost:8000/jobs/<job_id>
+
+# Fetch keyframes when done
+for frame in frame_a frame_b frame_c frame_d frame_e; do
+  curl -o "${frame}.png" http://localhost:8000/jobs/<job_id>/frames/$frame
+done
 ```
 
-Output frames are written to `output/frames/` by default. Phases 3 and 4 require API keys (see below); without them, the pipeline exits cleanly after Phase 2 with the 3 PNG keyframes ready.
+### CLI (phases 1 & 2 only)
+
+```bash
+python explodify.py --input your_assembly.step --explode 1.5
+```
+
+Output frames are written to `output/frames/` by default.
 
 ---
 
 ## Environment Variables
 
 ```env
-GOOGLE_API_KEY=...       # Gemini Flash (Phase 3 stylization)
-FAL_KEY=...              # fal.ai video synthesis (Phase 4)
+GOOGLE_API_KEY=...       # Gemini Flash (Phase 3 stylization — not yet active)
+FAL_KEY=...              # fal.ai video synthesis (Phase 4 — not yet active)
 ```
 
-Copy `.env.example` to `.env` and fill in your keys.
+Copy `.env.example` to `.env`. Phases 1 & 2 run without any API keys.
 
 ---
 
 ## Roadmap
 
-### v0.1 — Hackathon MVP (current sprint)
-- [x] Phase 1: Trimesh geometric analysis (optimal angle + explosion vectors)
+### v0.1 — Hackathon MVP (current)
+
+- [x] Phase 1: Trimesh geometric analysis (explosion vectors)
 - [x] Phase 1: STEP loading via cascadio (preserves named assembly components)
 - [x] Phase 1: Automatic upright reorientation (longest-axis alignment)
-- [x] Phase 1: Per-direction ray-cast grid (fixes camera angle for tall/wide assemblies)
-- [x] Phase 2: pyrender snapshot export (3 PNG keyframes)
+- [x] Phase 2: pyrender snapshot export — **5 PNG keyframes** at 0/25/50/75/100% explosion
 - [x] Phase 2: MTL material color extraction (OBJ/MTL diffuse → pyrender material)
 - [x] Phase 2: View-plane footprint camera (correct zoom for any aspect ratio)
-- [x] Phase 3: Gemini Flash stylization
-- [x] Phase 4: fal.ai video synthesis (Kling with keyframe anchoring)
-- [ ] FastAPI backend wiring all phases together
-- [ ] React frontend: upload → progress → download
+- [x] Phase 2: Camera up-vector rotation (Rodrigues) for user roll correction
+- [x] Orientation preview: 6-face orthographic screenshots before pipeline starts
+- [x] FastAPI backend: `/preview`, `/jobs`, `/jobs/{id}/frames/{name}` endpoints
+- [x] Manual orientation selection: user picks front face + roll offset before rendering
 
-### v0.2 — Post-Hackathon Polish
-- [ ] Per-component material assignment (metal vs. plastic detection)
-- [ ] Custom style prompt editor in UI
-- [ ] Brand overlay (logo, color grading) post-processing pass
-- [ ] Batch processing for product catalogues
+### v0.2 — AI Stylization & Video
+
+- [ ] Phase 3: Gemini Flash image-to-image stylization (5 frames)
+- [ ] Phase 4: fal.ai Kling v2 video synthesis (4 interpolated clips → stitched MP4)
+- [ ] Serve final MP4 via `/jobs/{id}/video`
+- [ ] Style prompt editor in web UI
 
 ### v0.3 — Production
+
+- [ ] Per-component material assignment (metal vs. plastic detection)
+- [ ] Brand overlay (logo, color grading) post-processing pass
+- [ ] Batch processing for product catalogues
 - [ ] User accounts + job history
 - [ ] Webhook delivery of finished MP4
 - [ ] API for headless integration (CI/CD for product teams)
-- [ ] White-label embed widget
-
----
-
-## Partner Technologies
-
-| Partner | Usage | Hackathon Prize Track |
-|---------|-------|----------------------|
-| **Google Deepmind / Gemini Flash** | Phase 3 image stylization | Gemini Credits (finalist prizes) |
-| **fal.ai** | Phase 4 video synthesis | Best use of fal ($1000 USD credits) |
-
-Hackathon voucher code for fal.ai: `techeurope-london`
 
 ---
 
@@ -200,35 +247,42 @@ Hackathon voucher code for fal.ai: `techeurope-london`
 
 ```
 Explodify/
-├── explodify.py              # CLI entry point
+├── explodify.py                  # CLI entry point (phases 1 & 2)
 ├── requirements.txt
 ├── README.md
-├── .env.example              # API key template
+├── .env.example                  # API key template
 ├── pipeline/
-│   ├── models.py             # Shared dataclasses: NamedMesh, FrameSet, PipelineMetadata
-│   ├── format_loader.py      # Multi-format loader (STEP via cascadio, GLB/OBJ/STL via trimesh)
-│   ├── phase1_geometry.py    # Trimesh: reorient, optimal angle, explosion vectors
-│   ├── phase2_snapshots.py   # pyrender: PNG keyframe export
-│   ├── phase3_stylize.py     # Gemini Flash: image-to-image stylization
-│   └── phase4_video.py       # fal.ai: video synthesis
+│   ├── models.py                 # Shared dataclasses: NamedMesh, FrameSet, PipelineMetadata
+│   ├── format_loader.py          # Multi-format loader (STEP via cascadio, GLB/OBJ/STL via trimesh)
+│   ├── phase1_geometry.py        # Trimesh: reorient, explosion vectors
+│   ├── phase2_snapshots.py       # pyrender: 5 PNG keyframes + orientation preview frame renderer
+│   └── orientation_preview.py   # 6-face orthographic preview renderer (used by /preview endpoint)
 ├── tests/
+│   ├── backend/
+│   │   └── test_api.py           # FastAPI endpoint tests
 │   └── pipeline/
 │       ├── conftest.py           # Shared fixtures (two-box GLB assembly)
 │       ├── test_format_loader.py
 │       ├── test_phase1_geometry.py
 │       ├── test_phase2_snapshots.py
+│       ├── test_orientation_preview.py
 │       └── test_integration_phase1_2.py
-├── backend/
-│   ├── main.py               # FastAPI app + job queue
-│   └── models.py             # Pydantic job/status models
-└── frontend/
-    └── src/
-        ├── App.tsx
-        └── components/
-            ├── UploadZone.tsx
-            ├── PipelineProgress.tsx
-            └── VideoPreview.tsx
+└── backend/
+    ├── main.py                   # FastAPI app: /preview, /jobs, /jobs/{id}/frames/{name}
+    ├── jobs.py                   # In-memory job store
+    └── models.py                 # Pydantic job/status models
 ```
+
+---
+
+## Partner Technologies
+
+| Partner | Usage | Hackathon Prize Track |
+|---------|-------|----------------------|
+| **Google Deepmind / Gemini Flash** | Phase 3 image stylization *(planned)* | Gemini Credits |
+| **fal.ai** | Phase 4 video synthesis *(planned)* | Best use of fal ($1000 USD credits) |
+
+Hackathon voucher code for fal.ai: `techeurope-london`
 
 ---
 

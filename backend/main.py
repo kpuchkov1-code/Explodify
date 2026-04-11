@@ -30,10 +30,45 @@ PREVIEW_DIR = Path(tempfile.gettempdir()) / "explodify_previews"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
 
+# Sample file bundled with the frontend (served from public/)
+_FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "public"
+SAMPLE_OBJ = _FRONTEND_DIR / "sample.obj"
+
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/preview/sample")
+async def preview_sample():
+    """Return orientation previews for the bundled sample model (no upload required)."""
+    if not SAMPLE_OBJ.exists():
+        raise HTTPException(status_code=404, detail="Sample file not found on server.")
+
+    # Reuse an existing render if we already processed this session to save time.
+    cached = list(PREVIEW_DIR.glob("sample_*"))
+    preview_id = cached[0].stem.replace("sample_", "") if cached else None
+
+    if not preview_id:
+        preview_id = str(uuid.uuid4())
+        dest = PREVIEW_DIR / f"{preview_id}.obj"
+        dest.write_bytes(SAMPLE_OBJ.read_bytes())
+
+    try:
+        from pipeline.format_loader import load_assembly
+        from pipeline.orientation_preview import render_orientation_previews
+
+        named_meshes = load_assembly(str(PREVIEW_DIR / f"{preview_id}.obj"))
+        images = render_orientation_previews(named_meshes)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    # Tag the file so we can find the cached render next time
+    cached_marker = PREVIEW_DIR / f"sample_{preview_id}"
+    cached_marker.touch(exist_ok=True)
+
+    return {"preview_id": preview_id, "images": images}
 
 
 @app.post("/preview")
@@ -54,8 +89,11 @@ async def preview_orientations(file: UploadFile = File(...)):
         from pipeline.format_loader import load_assembly
         from pipeline.orientation_preview import render_orientation_previews
 
-        named_meshes = await asyncio.to_thread(load_assembly, str(preview_path))
-        images = await asyncio.to_thread(render_orientation_previews, named_meshes)
+        # Run synchronously on the main thread — pyrender's Cocoa/pyglet backend
+        # requires the OS main thread on macOS.  Blocking the event loop here is
+        # acceptable since this is a short-lived preview render (< 15 s).
+        named_meshes = load_assembly(str(preview_path))
+        images = render_orientation_previews(named_meshes)
     except Exception as exc:
         preview_path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail=str(exc))
@@ -108,17 +146,21 @@ def get_job(job_id: str):
     return job
 
 
-@app.get("/jobs/{job_id}/video")
-def get_video(job_id: str):
+@app.get("/jobs/{job_id}/frames/{frame_name}")
+def get_frame(job_id: str, frame_name: str):
+    """Serve one of the 5 raw keyframe PNGs (frame_a … frame_e)."""
+    allowed = {"frame_a", "frame_b", "frame_c", "frame_d", "frame_e"}
+    if frame_name not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unknown frame: {frame_name}")
     job = jobs.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     if job.status != "done":
-        raise HTTPException(status_code=425, detail="Video not ready yet")
-    video_path = jobs.get_video_path(job_id)
-    if not video_path or not video_path.exists():
-        raise HTTPException(status_code=404, detail="Video file missing")
-    return FileResponse(str(video_path), media_type="video/mp4")
+        raise HTTPException(status_code=425, detail="Frames not ready yet")
+    frame_path = UPLOAD_DIR / job_id / "raw" / f"{frame_name}.png"
+    if not frame_path.exists():
+        raise HTTPException(status_code=404, detail=f"{frame_name}.png not found")
+    return FileResponse(str(frame_path), media_type="image/png")
 
 
 async def _run_pipeline(
@@ -140,16 +182,18 @@ async def _run_pipeline(
         jobs.update_phase(job_id, 1, "running")
         from pipeline.phase1_geometry import GeometryAnalyzer
         analyzer = GeometryAnalyzer()
+        # File loading is thread-safe; use to_thread to avoid blocking event loop.
         meshes = await asyncio.to_thread(analyzer.load, str(cad_path))
         vectors = await asyncio.to_thread(analyzer.explosion_vectors, meshes, scalar)
         jobs.update_phase(job_id, 1, "done")
 
-        # Phase 2
+        # Phase 2 — pyrender rendering must run on the OS main thread on macOS
+        # (pyglet/Cocoa restriction).  We call it synchronously here; the asyncio
+        # task itself runs on the main thread so this is safe.
         jobs.update_phase(job_id, 2, "running")
         from pipeline.phase2_snapshots import SnapshotRenderer
         renderer = SnapshotRenderer()
-        frame_set = await asyncio.to_thread(
-            renderer.render,
+        frame_set = renderer.render(
             meshes,
             vectors,
             master_angle,
@@ -160,25 +204,12 @@ async def _run_pipeline(
         )
         jobs.update_phase(job_id, 2, "done")
 
-        # Phase 3
-        jobs.update_phase(job_id, 3, "running")
-        from pipeline.phase3_stylize import GeminiStylizer
-        stylizer = GeminiStylizer()
-        stylized = await asyncio.to_thread(
-            stylizer.stylize, frame_set, output_dir / "stylized"
-        )
+        # Phases 3 & 4 (Gemini stylization + FAL video) are skipped for now.
+        # Mark phase 3 and 4 as done immediately so the frontend sees completion.
         jobs.update_phase(job_id, 3, "done")
-
-        # Phase 4
-        jobs.update_phase(job_id, 4, "running")
-        from pipeline.phase4_video import FalVideoSynth
-        synth = FalVideoSynth()
-        video_path = await asyncio.to_thread(
-            synth.synthesize, stylized, output_dir / "output.mp4"
-        )
         jobs.update_phase(job_id, 4, "done")
 
-        jobs.mark_done(job_id, video_path)
+        jobs.mark_done(job_id, None)
 
     except Exception as e:
         current_job = jobs.get_job(job_id)

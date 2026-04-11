@@ -4,7 +4,7 @@ import { UploadZone } from './components/UploadZone'
 import { PromptInput } from './components/PromptInput'
 import { PipelineProgress } from './components/PipelineProgress'
 import { OrientationPicker } from './components/OrientationPicker'
-import { VideoPreview } from './components/VideoPreview'
+import { FramesPreview } from './components/FramesPreview'
 import { getPreviewImages, createJob, getJobStatus } from './api/client'
 import type { JobStatus, FaceName, PreviewResult } from './api/client'
 
@@ -17,7 +17,7 @@ type AppState =
   | 'error'
 
 export default function App() {
-  const [state, setState] = useState<AppState>('idle')
+  const [state, setState] = useState<AppState>('uploading')  // start loading sample
   const [jobId, setJobId] = useState<string | null>(null)
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null)
   const [stylePrompt, setStylePrompt] = useState('')
@@ -25,6 +25,23 @@ export default function App() {
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Auto-load sample on mount
+  useEffect(() => {
+    async function loadSample() {
+      try {
+        const resp = await fetch('/preview/sample')
+        if (!resp.ok) throw new Error(`Sample preview failed: ${resp.statusText}`)
+        const result: PreviewResult = await resp.json()
+        setPreview(result)
+        setState('orientation')
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : 'Failed to load sample')
+        setState('error')
+      }
+    }
+    loadSample()
+  }, [])
 
   // Step 1: upload file → fetch 6 orientation previews
   async function handleUpload(file: File, uploadedScalar: number) {
@@ -101,29 +118,39 @@ export default function App() {
         <p className="text-gray-500 mt-2">CAD file → studio-grade exploded-view animation</p>
       </header>
 
-      {/* Step 1: Upload */}
-      {(state === 'idle' || state === 'uploading') && (
+      {/* Loading state (sample auto-load or user upload) */}
+      {state === 'uploading' && (
+        <p className="text-sm text-gray-500 animate-pulse">
+          Rendering 6 orientation views…
+        </p>
+      )}
+
+      {/* Upload your own (shown only when explicitly idle after reset) */}
+      {state === 'idle' && (
         <>
           <PromptInput
             value={stylePrompt}
             onChange={setStylePrompt}
-            disabled={state === 'uploading'}
+            disabled={false}
           />
-          <UploadZone onUpload={handleUpload} disabled={state === 'uploading'} />
-          {state === 'uploading' && (
-            <p className="text-sm text-gray-500 animate-pulse">
-              Loading orientation previews...
-            </p>
-          )}
+          <UploadZone onUpload={handleUpload} disabled={false} />
         </>
       )}
 
       {/* Step 2: Orientation selection */}
       {state === 'orientation' && preview && (
-        <OrientationPicker
-          images={preview.images}
-          onConfirm={handleOrientationConfirm}
-        />
+        <>
+          <OrientationPicker
+            images={preview.images}
+            onConfirm={handleOrientationConfirm}
+          />
+          <button
+            onClick={() => setState('idle')}
+            className="text-xs text-gray-400 hover:text-gray-600 underline -mt-4"
+          >
+            Upload your own file instead
+          </button>
+        </>
       )}
 
       {/* Step 3: Pipeline progress */}
@@ -137,12 +164,12 @@ export default function App() {
       {/* Step 4: Done */}
       {state === 'done' && jobId && (
         <>
-          <VideoPreview jobId={jobId} />
+          <FramesPreview jobId={jobId} />
           <button
             onClick={reset}
             className="text-sm text-gray-400 hover:text-gray-600 underline"
           >
-            Upload another file
+            Try another orientation
           </button>
         </>
       )}

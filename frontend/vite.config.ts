@@ -10,7 +10,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/jobs': 'http://localhost:8000',
+      '/preview': 'http://localhost:8000',
       '/health': 'http://localhost:8000',
     },
+    // /jobs already covers /jobs/{id}/frames — no extra entry needed
   },
 })

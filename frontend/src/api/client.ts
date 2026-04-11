@@ -11,7 +11,6 @@ export interface JobStatus {
   current_phase_name: string
   phases: PhaseStatus
   error: string | null
-  video_url: string | null
 }
 
 export type FaceName = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom'
@@ -60,6 +59,3 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
   return resp.json()
 }
 
-export function getVideoUrl(jobId: string): string {
-  return `/jobs/${jobId}/video`
-}
