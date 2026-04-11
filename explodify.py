@@ -108,8 +108,8 @@ def main():
         synth = FalVideoSynth()
         video_path = synth.synthesize(stylized, output_path=output_path)
         print(f"[Done] Video written to {video_path}")
-    except ImportError:
-        print("[Phase 3+4] Not yet implemented — frame set ready at: {frames_dir}")
+    except (ImportError, KeyError) as e:
+        print(f"[Phase 3+4] Skipped ({e}) — frame set ready at: {frames_dir}")
 
 
 if __name__ == "__main__":
