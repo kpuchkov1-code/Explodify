@@ -2,7 +2,6 @@
 from pathlib import Path
 from typing import List
 
-import numpy as np
 import trimesh
 
 from pipeline.models import (
@@ -20,10 +19,18 @@ _MAGIC = {
     b"solid ": ".stl",
 }
 
-# When a STEP/GLB has more fragments than this, cluster them into groups
-_FRAGMENT_CLUSTER_THRESHOLD = 50
-# Number of spatial clusters to produce when over the threshold
-_N_CLUSTERS = 8
+_MAX_COMPONENTS = 100
+
+_TOO_MANY_COMPONENTS_HELP = """
+This file contains {count} components, which exceeds the limit of {limit}.
+
+This usually means the STEP was exported as a single body without an assembly
+tree (every face becomes its own compound). Re-export with assembly structure:
+
+  SolidWorks:   File -> Save As -> STEP AP214, check "Export as assembly"
+  Fusion 360:   File -> Export -> STEP, ensure components are not merged
+  Onshape:      Export -> STEP, select "Export each part as a separate body"
+"""
 
 
 def load_assembly(path: str) -> List[NamedMesh]:
@@ -31,20 +38,15 @@ def load_assembly(path: str) -> List[NamedMesh]:
 
     Supports STEP (.step/.stp) and mesh formats (GLB, OBJ, STL, PLY, 3MF).
 
-    For STEP files: cascadio (OpenCASCADE) converts to GLB which preserves
-    per-part names. If the STEP has no assembly structure (exported as a
-    single body meshed into many face-level fragments), the fragments are
-    spatially clustered into logical groups automatically.
-
     Args:
         path: Path to the assembly file.
 
     Returns:
-        List of NamedMesh, one per component (or cluster) in the assembly.
+        List of NamedMesh, one per component in the assembly.
 
     Raises:
         FileNotFoundError: If the path does not exist.
-        UnsupportedFormatError: If the format is not supported.
+        UnsupportedFormatError: If the format is not supported or has too many components.
     """
     p = Path(path)
     if not p.exists():
@@ -61,10 +63,12 @@ def load_assembly(path: str) -> List[NamedMesh]:
     else:
         loaded = trimesh.load(str(p), force="scene")
 
-    named = _scene_to_named_meshes(loaded, fmt)
+    named = _scene_to_named_meshes(loaded)
 
-    if len(named) > _FRAGMENT_CLUSTER_THRESHOLD:
-        named = _cluster_fragments(named)
+    if len(named) > _MAX_COMPONENTS:
+        raise UnsupportedFormatError(
+            _TOO_MANY_COMPONENTS_HELP.format(count=len(named), limit=_MAX_COMPONENTS)
+        )
 
     return named
 
@@ -101,7 +105,7 @@ def _detect_format(p: Path) -> str:
     return ext
 
 
-def _scene_to_named_meshes(scene, fmt: str) -> List[NamedMesh]:
+def _scene_to_named_meshes(scene) -> List[NamedMesh]:
     """Extract non-empty trimesh.Trimesh objects from a loaded scene."""
     if isinstance(scene, trimesh.Trimesh):
         if len(scene.faces) == 0:
@@ -125,38 +129,3 @@ def _scene_to_named_meshes(scene, fmt: str) -> List[NamedMesh]:
         )
 
     return meshes
-
-
-def _cluster_fragments(named: List[NamedMesh]) -> List[NamedMesh]:
-    """Spatially cluster many small fragments into N logical components.
-
-    Uses k-means on mesh centroids. Fragments within each cluster are
-    concatenated into a single NamedMesh named 'part_0', 'part_1', etc.
-
-    Args:
-        named: List of NamedMesh with more than _FRAGMENT_CLUSTER_THRESHOLD entries.
-
-    Returns:
-        List of _N_CLUSTERS NamedMesh entries (or fewer if some clusters are empty).
-    """
-    from sklearn.cluster import KMeans
-
-    centroids = np.array([nm.mesh.centroid for nm in named])
-    n_clusters = min(_N_CLUSTERS, len(named))
-
-    km = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
-    labels = km.fit_predict(centroids)
-
-    clusters: dict[int, list[trimesh.Trimesh]] = {}
-    for i, nm in enumerate(named):
-        clusters.setdefault(labels[i], []).append(nm.mesh)
-
-    result = []
-    for cluster_id in sorted(clusters.keys()):
-        meshes = clusters[cluster_id]
-        if not meshes:
-            continue
-        merged = trimesh.util.concatenate(meshes)
-        result.append(NamedMesh(name=f"part_{cluster_id}", mesh=merged))
-
-    return result
