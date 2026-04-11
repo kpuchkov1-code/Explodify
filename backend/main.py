@@ -166,13 +166,30 @@ def get_frame(job_id: str, frame_name: str):
     return FileResponse(str(frame_path), media_type="image/png")
 
 
+@app.post("/jobs/{job_id}/approve", status_code=202)
+def approve_job(job_id: str):
+    """Approve Phase 4 (Kling AI styling) for a job that is awaiting approval."""
+    job = jobs.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    if job.status != "awaiting_approval":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job is not awaiting approval (status: {job.status})",
+        )
+    signalled = jobs.approve_phase4(job_id)
+    if not signalled:
+        raise HTTPException(status_code=409, detail="Approval event already consumed")
+    return {"ok": True}
+
+
 @app.get("/jobs/{job_id}/video")
 def get_video(job_id: str):
-    """Serve the final styled mp4 produced by Phase 4."""
+    """Serve the assembled mp4.  Returns base video while awaiting approval or done."""
     job = jobs.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job.status != "done":
+    if job.status not in ("awaiting_approval", "done"):
         raise HTTPException(status_code=425, detail="Video not ready yet")
     video_path = UPLOAD_DIR / job_id / "final_video.mp4"
     if not video_path.exists():
@@ -253,10 +270,14 @@ async def _run_pipeline(
         )
         jobs.update_phase(job_id, 3, "done")
 
-        # ── Phase 4: Kling o1 edit ─────────────────────────────────────────
+        # ── Phase 4: Kling o1 edit (requires user approval) ───────────────
+        # Pause here and let the user review the base video before spending
+        # FAL credits.  The frontend calls POST /jobs/{id}/approve to continue.
+        approval_event = jobs.mark_awaiting_approval(job_id)
+        await approval_event.wait()
+
         fal_key = os.environ.get("FAL_KEY", "")
         if not fal_key:
-            # No FAL key configured — mark done with just the raw video
             import logging
             logging.warning("FAL_KEY not set; skipping Phase 4 Kling edit")
             jobs.update_phase(job_id, 4, "done")

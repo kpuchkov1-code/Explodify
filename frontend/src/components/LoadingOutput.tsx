@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import type { JobStatus } from '../api/client'
 
 interface Props {
-  phase: 'orientation' | 'pipeline'
+  phase: 'orientation' | 'pipeline' | 'styling'
   jobStatus: JobStatus | null
 }
 
@@ -26,6 +26,17 @@ const PIPELINE_PHRASES = [
   'Calibrating camera paths...',
   'Computing part displacements...',
   'Finalizing render pass...',
+]
+
+const STYLING_PHRASES = [
+  'Uploading to fal.ai...',
+  'Kling AI processing...',
+  'Applying studio lighting...',
+  'Rendering materials...',
+  'Compositing environment...',
+  'Finalizing styled output...',
+  'AI upscaling video...',
+  'Downloading result...',
 ]
 
 const PIPELINE_PHASES = [
@@ -57,7 +68,11 @@ function getPhaseDetail(jobStatus: JobStatus | null): string {
 }
 
 export function LoadingOutput({ phase, jobStatus }: Props) {
-  const phrases = phase === 'orientation' ? ORIENTATION_PHRASES : PIPELINE_PHRASES
+  const phrases = phase === 'orientation'
+    ? ORIENTATION_PHRASES
+    : phase === 'styling'
+      ? STYLING_PHRASES
+      : PIPELINE_PHRASES
   const [phraseIndex, setPhraseIndex] = useState(0)
   const [fading, setFading] = useState(false)
 
@@ -72,9 +87,13 @@ export function LoadingOutput({ phase, jobStatus }: Props) {
     return () => clearInterval(timer)
   }, [phrases.length])
 
-  const progress = phase === 'orientation' ? 20 : computeProgress(jobStatus)
-  const displayName = phase === 'orientation' ? 'ORIENTATION' : getPhaseDisplayName(jobStatus)
-  const displayDetail = phase === 'orientation' ? 'Computing 6 face previews' : getPhaseDetail(jobStatus)
+  const progress = phase === 'orientation' ? 20 : phase === 'styling' ? 60 : computeProgress(jobStatus)
+  const displayName = phase === 'orientation' ? 'ORIENTATION' : phase === 'styling' ? 'KLING AI STYLING' : getPhaseDisplayName(jobStatus)
+  const displayDetail = phase === 'orientation'
+    ? 'Computing 6 face previews'
+    : phase === 'styling'
+      ? 'Applying studio lighting, materials & environment (~3 min)'
+      : getPhaseDetail(jobStatus)
 
   return (
     <div className="loading-output animate-fade-in">
@@ -111,8 +130,8 @@ export function LoadingOutput({ phase, jobStatus }: Props) {
           {phrases[phraseIndex]}
         </div>
 
-        {/* Phase steps — only shown during pipeline phase */}
-        {phase === 'pipeline' && (
+        {/* Phase steps — only shown during pipeline or styling phase */}
+        {(phase === 'pipeline' || phase === 'styling') && (
           <div className="loading-phases-row">
             {PIPELINE_PHASES.map((p, idx) => {
               const status = jobStatus?.phases[p.id] ?? 'pending'

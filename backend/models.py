@@ -13,7 +13,7 @@ class PhaseStatus(str, Enum):
 
 class JobStatus(BaseModel):
     job_id: str
-    status: str               # "queued" | "running" | "done" | "error"
+    status: str               # "queued" | "running" | "awaiting_approval" | "done" | "error"
     current_phase: int        # 1–4
     current_phase_name: str
     phases: dict[int, PhaseStatus]

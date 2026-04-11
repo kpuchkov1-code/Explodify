@@ -1,4 +1,5 @@
 # backend/jobs.py
+import asyncio
 import uuid
 
 from backend.models import JobStatus, PhaseStatus
@@ -12,6 +13,10 @@ PHASE_NAMES = {
 
 # In-memory store: job_id → JobStatus
 _jobs: dict[str, JobStatus] = {}
+
+# Per-job events used to unblock Phase 4 after user approval.
+# job_id → asyncio.Event (set when user approves; deleted when job finishes)
+_approval_events: dict[str, asyncio.Event] = {}
 
 
 def create_job() -> str:
@@ -43,6 +48,30 @@ def update_phase(job_id: str, phase: int, status: PhaseStatus | str) -> None:
         phases=new_phases,
         error=job.error,
     )
+
+
+def mark_awaiting_approval(job_id: str) -> asyncio.Event:
+    """Pause pipeline after Phase 3; return an Event the caller should await."""
+    new_phases = {**_jobs[job_id].phases}
+    _jobs[job_id] = JobStatus(
+        job_id=job_id,
+        status="awaiting_approval",
+        current_phase=3,
+        current_phase_name=PHASE_NAMES[3],
+        phases=new_phases,
+    )
+    event = asyncio.Event()
+    _approval_events[job_id] = event
+    return event
+
+
+def approve_phase4(job_id: str) -> bool:
+    """Signal Phase 4 to proceed. Returns False if no pending approval exists."""
+    event = _approval_events.pop(job_id, None)
+    if event is None:
+        return False
+    event.set()
+    return True
 
 
 def mark_done(job_id: str, _unused: None = None) -> None:

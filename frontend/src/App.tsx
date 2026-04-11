@@ -7,10 +7,10 @@ import { IdleOutput } from './components/IdleOutput'
 import { LoadingOutput } from './components/LoadingOutput'
 import { FramesOutput } from './components/FramesOutput'
 import { VideoOutput } from './components/VideoOutput'
-import { getPreviewImages, createJob, getJobStatus } from './api/client'
+import { getPreviewImages, createJob, getJobStatus, approvePhase4 } from './api/client'
 import type { JobStatus, FaceName, PreviewResult } from './api/client'
 
-type AppState = 'idle' | 'uploading' | 'orientation' | 'processing' | 'done' | 'error'
+type AppState = 'idle' | 'uploading' | 'orientation' | 'processing' | 'awaiting_approval' | 'styling' | 'done' | 'error'
 
 export interface StyleOptions {
   studioLighting: boolean
@@ -113,13 +113,17 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (state !== 'processing' || !jobId) return
+    const shouldPoll = state === 'processing' || state === 'styling'
+    if (!shouldPoll || !jobId) return
 
     pollRef.current = setInterval(async () => {
       try {
         const status = await getJobStatus(jobId)
         setJobStatus(status)
-        if (status.status === 'done') {
+        if (status.status === 'awaiting_approval') {
+          setState('awaiting_approval')
+          clearInterval(pollRef.current!)
+        } else if (status.status === 'done') {
           setState('done')
           clearInterval(pollRef.current!)
         } else if (status.status === 'error') {
@@ -135,6 +139,17 @@ export default function App() {
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [state, jobId])
 
+  async function handleApprove() {
+    if (!jobId) return
+    try {
+      await approvePhase4(jobId)
+      setState('styling')
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Approval failed')
+      setState('error')
+    }
+  }
+
   function reset() {
     setState('idle')
     setJobId(null)
@@ -148,7 +163,7 @@ export default function App() {
     setErrorMsg(null)
   }
 
-  const showControls = state === 'orientation' || state === 'processing' || state === 'done'
+  const showControls = state === 'orientation' || state === 'processing' || state === 'awaiting_approval' || state === 'styling' || state === 'done'
   const controlsDisabled = state !== 'orientation'
 
   return (
@@ -208,7 +223,25 @@ export default function App() {
                 <section className="panel-section animate-fade-in">
                   <div className="processing-indicator">
                     <div className="processing-dot" />
-                    Pipeline running...
+                    Rendering pipeline...
+                  </div>
+                </section>
+              )}
+
+              {state === 'awaiting_approval' && (
+                <section className="panel-section animate-fade-in">
+                  <div className="done-indicator">
+                    <span>✓</span>
+                    Base video ready
+                  </div>
+                </section>
+              )}
+
+              {state === 'styling' && (
+                <section className="panel-section animate-fade-in">
+                  <div className="processing-indicator">
+                    <div className="processing-dot" />
+                    Kling AI styling...
                   </div>
                 </section>
               )}
@@ -217,7 +250,7 @@ export default function App() {
                 <section className="panel-section animate-fade-in">
                   <div className="done-indicator">
                     <span>✓</span>
-                    Keyframes ready
+                    Styled video ready
                   </div>
                   <button className="reupload-btn" onClick={reset}>
                     ↺&nbsp;&nbsp;Start over with new file
@@ -263,6 +296,17 @@ export default function App() {
           <LoadingOutput phase="pipeline" jobStatus={jobStatus} />
         )}
 
+        {state === 'awaiting_approval' && jobId && (
+          <div className="output-stack animate-fade-in">
+            <FramesOutput jobId={jobId} />
+            <ApprovalGate jobId={jobId} onApprove={handleApprove} onSkip={reset} />
+          </div>
+        )}
+
+        {state === 'styling' && (
+          <LoadingOutput phase="styling" jobStatus={jobStatus} />
+        )}
+
         {state === 'done' && jobId && (
           <div className="output-stack animate-fade-in">
             <FramesOutput jobId={jobId} />
@@ -276,6 +320,57 @@ export default function App() {
           </div>
         )}
       </main>
+    </div>
+  )
+}
+
+/* Inline component — Phase 4 approval gate */
+function ApprovalGate({
+  jobId,
+  onApprove,
+  onSkip,
+}: {
+  jobId: string
+  onApprove: () => void
+  onSkip: () => void
+}) {
+  return (
+    <div className="approval-gate">
+      <div className="approval-preview">
+        <div className="approval-preview-label">Base video (72-frame render)</div>
+        <div className="video-player-wrap">
+          <video
+            src={`/jobs/${jobId}/video`}
+            controls
+            autoPlay
+            loop
+            playsInline
+            className="video-player"
+          />
+        </div>
+      </div>
+      <div className="approval-panel">
+        <div className="approval-warning">
+          <span className="approval-warning-icon">!</span>
+          <div>
+            <div className="approval-warning-title">Kling AI styling takes ~3 minutes</div>
+            <div className="approval-warning-body">
+              Phase 4 uploads this video to fal.ai and applies studio lighting,
+              materials, and environment via Kling o1. This consumes FAL credits.
+              Review the base render above before proceeding.
+            </div>
+          </div>
+        </div>
+        <div className="approval-actions">
+          <button className="approve-btn" onClick={onApprove}>
+            Apply AI Styling
+            <span className="generate-arrow">→</span>
+          </button>
+          <button className="skip-btn" onClick={onSkip}>
+            Keep base video &amp; finish
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

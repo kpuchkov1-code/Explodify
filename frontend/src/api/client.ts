@@ -6,7 +6,7 @@ export interface PhaseStatus {
 
 export interface JobStatus {
   job_id: string
-  status: 'queued' | 'running' | 'done' | 'error'
+  status: 'queued' | 'running' | 'awaiting_approval' | 'done' | 'error'
   current_phase: number
   current_phase_name: string
   phases: PhaseStatus
@@ -60,5 +60,10 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
   const resp = await fetch(`/jobs/${jobId}`)
   if (!resp.ok) throw new Error(`Status check failed: ${resp.statusText}`)
   return resp.json()
+}
+
+export async function approvePhase4(jobId: string): Promise<void> {
+  const resp = await fetch(`/jobs/${jobId}/approve`, { method: 'POST' })
+  if (!resp.ok) throw new Error(`Approval failed: ${resp.statusText}`)
 }
 
