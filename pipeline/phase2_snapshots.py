@@ -9,9 +9,9 @@ from PIL import Image
 
 from pipeline.models import FrameSet, NamedMesh, PipelineMetadata
 
-# 10° per step keeps consecutive-frame delta within FAL/Kling's safe
-# interpolation window (~15° max before the model hallucinates geometry).
-CAMERA_ANGLES_DEG = [0.0, 10.0, 20.0, 30.0, 40.0]
+# Default orbit range: 10° per step is safe for FAL/Kling interpolation.
+# Maximum safe total orbit is 60° (15° per step × 4 steps).
+DEFAULT_ORBIT_RANGE_DEG = 40.0
 EXPLOSION_FRACTIONS = [0.0, 0.25, 0.5, 0.75, 1.0]
 FRAME_NAMES = ["frame_a", "frame_b", "frame_c", "frame_d", "frame_e"]
 RESOLUTION = (1024, 768)
@@ -37,7 +37,7 @@ class SnapshotRenderer:
         output_dir: Path,
         scalar: float,
         source_format: str = "",
-        rotation_offset_deg: float = 0.0,
+        orbit_range_deg: float = DEFAULT_ORBIT_RANGE_DEG,
     ) -> FrameSet:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -45,14 +45,16 @@ class SnapshotRenderer:
         meshes = [nm.mesh for nm in named_meshes]
         cam_dir = _pick_camera_direction(meshes, master_angle)
 
+        # Distribute orbit evenly across frames: [0, r/4, r/2, 3r/4, r]
+        n = len(FRAME_NAMES)
+        camera_angles = [orbit_range_deg * i / (n - 1) for i in range(n)]
+
         frame_paths = []
         for fraction, orbit_deg, name in zip(
-            EXPLOSION_FRACTIONS, CAMERA_ANGLES_DEG, FRAME_NAMES
+            EXPLOSION_FRACTIONS, camera_angles, FRAME_NAMES
         ):
             exploded = self._apply_explosion(meshes, explosion_vectors, fraction)
-            img = self._render_scene(
-                exploded, cam_dir, orbit_deg, up_rotation_deg=rotation_offset_deg
-            )
+            img = self._render_scene(exploded, cam_dir, orbit_deg)
             out_path = output_dir / f"{name}.png"
             img.save(str(out_path))
             frame_paths.append(out_path)
@@ -61,7 +63,7 @@ class SnapshotRenderer:
             master_angle=master_angle,
             explosion_scalar=scalar,
             component_count=len(named_meshes),
-            camera_angles_deg=CAMERA_ANGLES_DEG,
+            camera_angles_deg=camera_angles,
             source_format=source_format,
             component_names=[nm.name for nm in named_meshes],
         )
@@ -99,7 +101,7 @@ class SnapshotRenderer:
         import pyrender
 
         pr_scene = pyrender.Scene(
-            bg_color=[0.15, 0.15, 0.18, 1.0],
+            bg_color=[0.0, 0.0, 0.0, 1.0],
             ambient_light=[0.35, 0.35, 0.35],
         )
 

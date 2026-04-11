@@ -37,7 +37,7 @@ export async function createJob(
     explodeScalar: number
     stylePrompt: string
     masterAngle: FaceName
-    rotationOffsetDeg: number
+    orbitRangeDeg: number
   },
 ): Promise<string> {
   const form = new FormData()
@@ -45,7 +45,7 @@ export async function createJob(
   form.append('explode_scalar', String(options.explodeScalar))
   form.append('style_prompt', options.stylePrompt)
   form.append('master_angle', options.masterAngle)
-  form.append('rotation_offset_deg', String(options.rotationOffsetDeg))
+  form.append('orbit_range_deg', String(options.orbitRangeDeg))
 
   const resp = await fetch('/jobs', { method: 'POST', body: form })
   if (!resp.ok) throw new Error(`Job creation failed: ${resp.statusText}`)

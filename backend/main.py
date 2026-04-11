@@ -108,13 +108,14 @@ async def create_job(
     explode_scalar: float = Form(1.5),
     style_prompt: str = Form(""),
     master_angle: str = Form("front"),
-    rotation_offset_deg: float = Form(0.0),
+    orbit_range_deg: float = Form(40.0),
 ):
     """Create a background exploded-view job.
 
     Supply either a fresh `file` upload or a `preview_id` returned from POST /preview.
-    The `master_angle` (front/back/left/right/top/bottom) and `rotation_offset_deg`
-    (0/90/180/270) are set during the orientation selection step.
+    The `master_angle` (front/back/left/right/top/bottom) sets the camera direction.
+    `orbit_range_deg` controls total camera orbit from frame A to frame E (default 40°,
+    max 60° for Kling interpolation safety).
     """
     if preview_id:
         matches = list(PREVIEW_DIR.glob(f"{preview_id}.*"))
@@ -132,7 +133,7 @@ async def create_job(
     job_id = jobs.create_job()
 
     asyncio.create_task(
-        _run_pipeline(job_id, cad_path, explode_scalar, style_prompt, master_angle, rotation_offset_deg)
+        _run_pipeline(job_id, cad_path, explode_scalar, style_prompt, master_angle, orbit_range_deg)
     )
 
     return {"job_id": job_id}
@@ -169,7 +170,7 @@ async def _run_pipeline(
     scalar: float,
     style_prompt: str = "",
     master_angle: str = "front",
-    rotation_offset_deg: float = 0.0,
+    orbit_range_deg: float = 40.0,
 ) -> None:
     """Run all 4 pipeline phases in a background asyncio task."""
     output_dir = UPLOAD_DIR / job_id
@@ -200,7 +201,7 @@ async def _run_pipeline(
             output_dir / "raw",
             scalar,
             style_prompt,
-            rotation_offset_deg,
+            orbit_range_deg,
         )
         jobs.update_phase(job_id, 2, "done")
 

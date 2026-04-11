@@ -50,7 +50,7 @@ export default function App() {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null)
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [selectedFace, setSelectedFace] = useState<FaceName>('front')
-  const [rotationDeg, setRotationDeg] = useState(0)
+  const [orbitRangeDeg, setOrbitRangeDeg] = useState(40)
   const [explodeScalar, setExplodeScalar] = useState(1.5)
   const [styleOptions, setStyleOptions] = useState<StyleOptions>(DEFAULT_STYLE)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -96,7 +96,7 @@ export default function App() {
         explodeScalar,
         stylePrompt: buildStylePrompt(styleOptions),
         masterAngle: selectedFace,
-        rotationOffsetDeg: rotationDeg,
+        orbitRangeDeg,
       })
       setJobId(id)
       setJobStatus(null)
@@ -135,7 +135,7 @@ export default function App() {
     setJobStatus(null)
     setPreview(null)
     setSelectedFace('front')
-    setRotationDeg(0)
+    setOrbitRangeDeg(40)
     setExplodeScalar(1.5)
     setStyleOptions(DEFAULT_STYLE)
     setErrorMsg(null)
@@ -191,8 +191,8 @@ export default function App() {
                   onOptionsChange={setStyleOptions}
                   explodeScalar={explodeScalar}
                   onExplodeChange={setExplodeScalar}
-                  rotationDeg={rotationDeg}
-                  onRotationChange={setRotationDeg}
+                  orbitRangeDeg={orbitRangeDeg}
+                  onOrbitRangeChange={setOrbitRangeDeg}
                   disabled={controlsDisabled}
                 />
               </section>
@@ -254,7 +254,6 @@ export default function App() {
           <OrientationPreview
             imageSrc={preview.images[selectedFace]}
             faceName={selectedFace}
-            rotationDeg={rotationDeg}
           />
         )}
 
@@ -279,15 +278,13 @@ export default function App() {
   )
 }
 
-/* Small inline component — not worth its own file */
+/* Inline component — face preview during orientation selection */
 function OrientationPreview({
   imageSrc,
   faceName,
-  rotationDeg,
 }: {
   imageSrc: string
   faceName: string
-  rotationDeg: number
 }) {
   return (
     <div className="orient-preview-panel animate-fade-in">
@@ -297,12 +294,11 @@ function OrientationPreview({
           src={imageSrc}
           alt={`${faceName} orientation preview`}
           className="orient-preview-img"
-          style={{ transform: `rotate(${rotationDeg}deg)` }}
           draggable={false}
         />
       </div>
       <p className="orient-preview-hint">
-        Select a face on the left · Use rotation slider to correct alignment
+        Select a face on the left to set the camera direction
       </p>
     </div>
   )

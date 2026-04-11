@@ -6,8 +6,8 @@ interface Props {
   onOptionsChange: (opts: StyleOptions) => void
   explodeScalar: number
   onExplodeChange: (v: number) => void
-  rotationDeg: number
-  onRotationChange: (v: number) => void
+  orbitRangeDeg: number
+  onOrbitRangeChange: (v: number) => void
   disabled?: boolean
 }
 
@@ -25,8 +25,8 @@ export function StylePanel({
   onOptionsChange,
   explodeScalar,
   onExplodeChange,
-  rotationDeg,
-  onRotationChange,
+  orbitRangeDeg,
+  onOrbitRangeChange,
   disabled,
 }: Props) {
   function toggleOption(key: keyof Omit<StyleOptions, 'prompt'>) {
@@ -69,7 +69,7 @@ export function StylePanel({
         disabled={disabled}
       />
 
-      {/* Explosion slider */}
+      {/* Explosion level slider */}
       <div className="slider-row">
         <div className="slider-header">
           <span className="slider-label">Explosion Level</span>
@@ -89,23 +89,23 @@ export function StylePanel({
         </div>
       </div>
 
-      {/* Rotation slider */}
+      {/* Camera orbit range slider */}
       <div className="slider-row">
         <div className="slider-header">
-          <span className="slider-label">View Rotation</span>
+          <span className="slider-label">Camera Orbit</span>
         </div>
         <div className="slider-value-row">
           <input
             type="range"
             min={0}
-            max={90}
+            max={60}
             step={5}
-            value={rotationDeg}
-            onChange={(e) => onRotationChange(parseInt(e.target.value))}
+            value={orbitRangeDeg}
+            onChange={(e) => onOrbitRangeChange(parseInt(e.target.value))}
             disabled={disabled}
           />
-          <span className="slider-value">{rotationDeg}°</span>
-          <InfoIcon text="Capped at 90° for fal.ai — larger in-plane rotations create geometric discontinuities between reference frames that Kling cannot cleanly interpolate." />
+          <span className="slider-value">{orbitRangeDeg}°</span>
+          <InfoIcon text="Total orbit from frame 1 to frame 5. Capped at 60° for fal.ai — Kling hallucinates geometry when consecutive reference frames differ by more than ~15°." />
         </div>
       </div>
 
