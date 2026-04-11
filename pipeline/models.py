@@ -1,5 +1,5 @@
 # pipeline/models.py
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -16,7 +16,7 @@ class PipelineMetadata:
 
 @dataclass
 class FrameSet:
-    """Three PNG keyframes produced by Phase 2 and consumed by Phase 3."""
+    """Three PNG keyframes produced by Phase 2, consumed by Phase 3."""
     frame_a: Path   # 0%   explosion, 0°  camera — assembled
     frame_b: Path   # 50%  explosion, 15° camera — mid-explode
     frame_c: Path   # 100% explosion, 30° camera — fully exploded

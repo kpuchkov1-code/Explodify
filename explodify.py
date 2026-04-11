@@ -3,6 +3,7 @@ Explodify — CAD assembly to exploded-view animation.
 Entry point / CLI.
 """
 import argparse
+import dataclasses
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -38,21 +39,22 @@ def main():
     master = analyzer.master_angle(meshes)
     print(f"[Phase 1] Master angle: {master}")
     vectors = analyzer.explosion_vectors(meshes, scalar=args.explode)
+    print("[Phase 1] Explosion vectors computed")
 
     print("[Phase 2] Rendering keyframes ...")
     renderer = SnapshotRenderer()
-    frame_set = renderer.render(
-        meshes, vectors, master,
-        output_dir=frames_dir / "raw", scalar=args.explode,
-        style_prompt=args.style_prompt,
+    frame_set = renderer.render(meshes, vectors, master, output_dir=frames_dir, scalar=args.explode)
+    # Inject style_prompt into metadata (Phase 2 doesn't accept it directly yet)
+    frame_set = dataclasses.replace(
+        frame_set,
+        metadata=dataclasses.replace(frame_set.metadata, style_prompt=args.style_prompt),
     )
-    print(f"[Phase 2] Frames at {frames_dir}/raw/")
+    print(f"[Phase 2] Frames: {frame_set.frame_a}, {frame_set.frame_b}, {frame_set.frame_c}")
     if args.style_prompt:
-        print(f"[Phase 2] Style: {args.style_prompt}")
+        print(f"[Phase 2] Style prompt: {args.style_prompt}")
 
     print("[Phase 3] Gemini stylization ...")
     stylizer = GeminiStylizer()
-    # style_prompt is already in frame_set.metadata — GeminiStylizer reads it from there
     stylized = stylizer.stylize(frame_set, output_dir=frames_dir / "stylized")
     print(f"[Phase 3] Stylized frames at {frames_dir}/stylized/")
 
