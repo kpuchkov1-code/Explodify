@@ -17,12 +17,22 @@ FRAME_NAMES = ["frame_a", "frame_b", "frame_c", "frame_d", "frame_e"]
 RESOLUTION = (1024, 768)
 
 _ANGLE_TO_CAM_DIR = {
-    "top":    np.array([ 0.0,  1.0,  0.3]),
-    "bottom": np.array([ 0.0, -1.0,  0.3]),
-    "left":   np.array([-1.0,  0.3,  0.3]),
-    "right":  np.array([ 1.0,  0.3,  0.3]),
-    "front":  np.array([ 0.3,  0.3,  1.0]),
-    "back":   np.array([ 0.3,  0.3, -1.0]),
+    # Cardinal faces
+    "top":          np.array([ 0.0,  1.0,  0.3]),
+    "bottom":       np.array([ 0.0, -1.0,  0.3]),
+    "left":         np.array([-1.0,  0.3,  0.3]),
+    "right":        np.array([ 1.0,  0.3,  0.3]),
+    "front":        np.array([ 0.3,  0.3,  1.0]),
+    "back":         np.array([ 0.3,  0.3, -1.0]),
+    # 45-degree diagonals
+    "front-left":   np.array([-0.7,  0.3,  0.7]),
+    "front-right":  np.array([ 0.7,  0.3,  0.7]),
+    "top-front":    np.array([ 0.3,  0.7,  0.7]),
+    "top-back":     np.array([ 0.3,  0.7, -0.7]),
+    "top-left":     np.array([-0.7,  0.7,  0.3]),
+    "top-right":    np.array([ 0.7,  0.7,  0.3]),
+    "bottom-front": np.array([ 0.3, -0.7,  0.7]),
+    "bottom-back":  np.array([ 0.3, -0.7, -0.7]),
 }
 
 

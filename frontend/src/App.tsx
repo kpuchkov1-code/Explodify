@@ -34,6 +34,21 @@ function buildStylePrompt(opts: StyleOptions): string {
   return parts.join(', ')
 }
 
+const CARDINAL_FALLBACK: Record<string, 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom'> = {
+  'front-left':   'front',
+  'front-right':  'front',
+  'top-front':    'top',
+  'top-back':     'top',
+  'top-left':     'top',
+  'top-right':    'top',
+  'bottom-front': 'bottom',
+  'bottom-back':  'bottom',
+}
+
+function nearestCardinal(face: FaceName): 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom' {
+  return CARDINAL_FALLBACK[face] ?? (face as 'front')
+}
+
 const DEFAULT_STYLE: StyleOptions = {
   studioLighting: true,
   darkBackdrop: false,
@@ -246,12 +261,12 @@ export default function App() {
 
         {state === 'orientation' && preview && (
           <OrientationPreview
-            imageSrc={preview.images[selectedFace]}
+            imageSrc={preview.images[selectedFace] ?? preview.images[nearestCardinal(selectedFace)]}
             faceName={selectedFace}
             selectedFace={selectedFace}
             onFaceChange={(face) => { setSelectedFace(face); setRotationDeg(0) }}
             rotationDeg={rotationDeg}
-            onRotate={() => setRotationDeg(prev => (prev + 90) % 360)}
+            onRotationChange={setRotationDeg}
           />
         )}
 
@@ -283,14 +298,14 @@ function OrientationPreview({
   selectedFace,
   onFaceChange,
   rotationDeg,
-  onRotate,
+  onRotationChange,
 }: {
   imageSrc: string
   faceName: string
   selectedFace: FaceName
   onFaceChange: (face: FaceName) => void
   rotationDeg: number
-  onRotate: () => void
+  onRotationChange: (deg: number) => void
 }) {
   return (
     <div className="orient-preview-panel animate-fade-in">
@@ -311,10 +326,20 @@ function OrientationPreview({
           onFaceChange={onFaceChange}
         />
 
-        <button className="rotate-btn" onClick={onRotate}>
-          ↻ Rotate
-          {rotationDeg !== 0 && <span className="rotate-badge">{rotationDeg}°</span>}
-        </button>
+        <div className="orient-rotation-slider">
+          <div className="slider-header">
+            <span className="slider-label">Rotation</span>
+            <span className="slider-value">{rotationDeg}°</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={350}
+            step={5}
+            value={rotationDeg}
+            onChange={(e) => onRotationChange(parseInt(e.target.value))}
+          />
+        </div>
       </div>
     </div>
   )
