@@ -58,15 +58,17 @@ class PipelineMetadata:
 
 @dataclass
 class FrameSet:
-    """Three PNG keyframes produced by Phase 2, consumed by Phase 3."""
+    """Five PNG keyframes produced by Phase 2, consumed by Phase 3."""
     frame_a: Path   # 0%   explosion, 0°  camera — assembled
-    frame_b: Path   # 50%  explosion, 15° camera — mid-explode
-    frame_c: Path   # 100% explosion, 30° camera — fully exploded
+    frame_b: Path   # 25%  explosion, 10° camera
+    frame_c: Path   # 50%  explosion, 20° camera — mid-explode
+    frame_d: Path   # 75%  explosion, 30° camera
+    frame_e: Path   # 100% explosion, 40° camera — fully exploded
     metadata: PipelineMetadata
 
     def validate(self) -> None:
         """Raise ValueError if any frame file is missing."""
-        for attr in ("frame_a", "frame_b", "frame_c"):
+        for attr in ("frame_a", "frame_b", "frame_c", "frame_d", "frame_e"):
             p = getattr(self, attr)
             if not Path(p).exists():
                 raise ValueError(f"Frame not found: {p}")

@@ -9,17 +9,19 @@ import io
 
 @pytest.fixture
 def stylized_frame_set(tmp_path):
-    for name in ("frame_a.png", "frame_b.png", "frame_c.png"):
+    for name in ("frame_a.png", "frame_b.png", "frame_c.png", "frame_d.png", "frame_e.png"):
         Image.new("RGB", (256, 256), color=(200, 200, 200)).save(tmp_path / name)
     return FrameSet(
         frame_a=tmp_path / "frame_a.png",
         frame_b=tmp_path / "frame_b.png",
         frame_c=tmp_path / "frame_c.png",
+        frame_d=tmp_path / "frame_d.png",
+        frame_e=tmp_path / "frame_e.png",
         metadata=PipelineMetadata(
             master_angle="front",
             explosion_scalar=1.5,
             component_count=2,
-            camera_angles_deg=[0.0, 15.0, 30.0],
+            camera_angles_deg=[0.0, 10.0, 20.0, 30.0, 40.0],
         ),
     )
 
@@ -46,8 +48,8 @@ def test_synthesize_produces_mp4(stylized_frame_set, tmp_path):
     assert output_path.exists()
 
 
-def test_synthesize_calls_fal_twice(stylized_frame_set, tmp_path):
-    """Two fal.ai calls: clip A→B and clip B→C."""
+def test_synthesize_calls_fal_four_times(stylized_frame_set, tmp_path):
+    """Four fal.ai calls: clips A→B, B→C, C→D, D→E."""
     output_path = tmp_path / "output.mp4"
     fake_video_bytes = b"\x00" * 512
 
@@ -61,4 +63,4 @@ def test_synthesize_calls_fal_twice(stylized_frame_set, tmp_path):
             synth = FalVideoSynth(fal_key="fake_key")
             synth.synthesize(stylized_frame_set, output_path=output_path)
 
-    assert mock_fal.subscribe.call_count == 2
+    assert mock_fal.subscribe.call_count == 4

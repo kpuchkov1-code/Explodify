@@ -48,16 +48,20 @@ class FalVideoSynth:
         frame_a_uri = self._to_data_uri(stylized_frames.frame_a)
         frame_b_uri = self._to_data_uri(stylized_frames.frame_b)
         frame_c_uri = self._to_data_uri(stylized_frames.frame_c)
+        frame_d_uri = self._to_data_uri(stylized_frames.frame_d)
+        frame_e_uri = self._to_data_uri(stylized_frames.frame_e)
 
         video_prompt = _build_video_prompt(stylized_frames.metadata.style_prompt)
 
-        # Clip 1: assembled → mid-explode (frame A → frame B)
+        # 4 clips covering 0% → 25% → 50% → 75% → 100% explosion
         clip1_bytes = self._generate_clip(frame_a_uri, frame_b_uri, video_prompt)
-        # Clip 2: mid-explode → fully exploded (frame B → frame C)
         clip2_bytes = self._generate_clip(frame_b_uri, frame_c_uri, video_prompt)
+        clip3_bytes = self._generate_clip(frame_c_uri, frame_d_uri, video_prompt)
+        clip4_bytes = self._generate_clip(frame_d_uri, frame_e_uri, video_prompt)
 
-        # Stitch clips by concatenating raw bytes (works for quick demo; use ffmpeg for production)
-        stitched = self._stitch_clips(clip1_bytes, clip2_bytes, output_path)
+        stitched = self._stitch_clips(
+            [clip1_bytes, clip2_bytes, clip3_bytes, clip4_bytes], output_path
+        )
         return stitched
 
     def _to_data_uri(self, frame_path: Path) -> str:
@@ -84,21 +88,21 @@ class FalVideoSynth:
         resp.raise_for_status()
         return resp.content
 
-    def _stitch_clips(self, clip1: bytes, clip2: bytes, output_path: Path) -> Path:
-        """Write both clips to temp files, concatenate with ffmpeg, return output_path."""
+    def _stitch_clips(self, clips: list[bytes], output_path: Path) -> Path:
+        """Write clips to temp files, concatenate with ffmpeg, return output_path."""
         import subprocess
 
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f1:
-            f1.write(clip1)
-            clip1_path = f1.name
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f2:
-            f2.write(clip2)
-            clip2_path = f2.name
+        clip_paths = []
+        for clip_bytes in clips:
+            f = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+            f.write(clip_bytes)
+            f.close()
+            clip_paths.append(f.name)
 
         concat_list = tempfile.NamedTemporaryFile(
             mode="w", suffix=".txt", delete=False
         )
-        concat_list.write(f"file '{clip1_path}'\nfile '{clip2_path}'\n")
+        concat_list.write("".join(f"file '{p}'\n" for p in clip_paths))
         concat_list.close()
 
         try:
@@ -114,7 +118,7 @@ class FalVideoSynth:
                 capture_output=True,
             )
         except (subprocess.CalledProcessError, FileNotFoundError):
-            # ffmpeg not available — just write clip1 as fallback
-            output_path.write_bytes(clip1)
+            # ffmpeg not available — write first clip as fallback
+            output_path.write_bytes(clips[0])
 
         return output_path

@@ -37,14 +37,14 @@ class GeminiStylizer:
         self._client = genai.Client(api_key=self._api_key)
 
     def stylize(self, frame_set: FrameSet, output_dir: Path) -> FrameSet:
-        """Apply Gemini image-to-image stylization to all 3 frames.
+        """Apply Gemini image-to-image stylization to all 5 frames.
 
         The style prompt is read from frame_set.metadata.style_prompt.
         If empty, DEFAULT_STYLE_PROMPT is used.
 
         Args:
             frame_set: Raw FrameSet produced by Phase 2 (carries style_prompt in metadata).
-            output_dir: Directory to write frame_a.png, frame_b.png, frame_c.png.
+            output_dir: Directory to write frame_a.png through frame_e.png.
 
         Returns:
             New FrameSet pointing to stylized PNG files, with same metadata.
@@ -58,6 +58,8 @@ class GeminiStylizer:
             (frame_set.frame_a, "frame_a.png"),
             (frame_set.frame_b, "frame_b.png"),
             (frame_set.frame_c, "frame_c.png"),
+            (frame_set.frame_d, "frame_d.png"),
+            (frame_set.frame_e, "frame_e.png"),
         ]
         output_paths = []
         for src_path, out_name in frame_map:
@@ -70,6 +72,8 @@ class GeminiStylizer:
             frame_a=output_paths[0],
             frame_b=output_paths[1],
             frame_c=output_paths[2],
+            frame_d=output_paths[3],
+            frame_e=output_paths[4],
             metadata=frame_set.metadata,
         )
 

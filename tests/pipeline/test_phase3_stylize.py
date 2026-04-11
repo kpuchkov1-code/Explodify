@@ -9,17 +9,19 @@ from pipeline.models import FrameSet, PipelineMetadata
 def mock_frame_set(tmp_path):
     """FrameSet with real (blank white) PNGs for testing without a real CAD file."""
     from PIL import Image
-    for name in ("frame_a.png", "frame_b.png", "frame_c.png"):
+    for name in ("frame_a.png", "frame_b.png", "frame_c.png", "frame_d.png", "frame_e.png"):
         Image.new("RGB", (256, 256), color=(200, 200, 200)).save(tmp_path / name)
     return FrameSet(
         frame_a=tmp_path / "frame_a.png",
         frame_b=tmp_path / "frame_b.png",
         frame_c=tmp_path / "frame_c.png",
+        frame_d=tmp_path / "frame_d.png",
+        frame_e=tmp_path / "frame_e.png",
         metadata=PipelineMetadata(
             master_angle="front",
             explosion_scalar=1.5,
             component_count=2,
-            camera_angles_deg=[0.0, 15.0, 30.0],
+            camera_angles_deg=[0.0, 10.0, 20.0, 30.0, 40.0],
         ),
     )
 
@@ -38,8 +40,8 @@ def fake_gemini_response():
     return response
 
 
-def test_stylize_returns_frame_set_with_three_pngs(mock_frame_set, tmp_path, fake_gemini_response):
-    """Stylize should return a FrameSet with 3 existing PNG files."""
+def test_stylize_returns_frame_set_with_five_pngs(mock_frame_set, tmp_path, fake_gemini_response):
+    """Stylize should return a FrameSet with 5 existing PNG files."""
     with patch("pipeline.phase3_stylize.genai") as mock_genai:
         mock_client = MagicMock()
         mock_genai.Client.return_value = mock_client
@@ -52,6 +54,8 @@ def test_stylize_returns_frame_set_with_three_pngs(mock_frame_set, tmp_path, fak
     assert result.frame_a.exists()
     assert result.frame_b.exists()
     assert result.frame_c.exists()
+    assert result.frame_d.exists()
+    assert result.frame_e.exists()
 
 
 def test_stylize_uses_custom_style_prompt(mock_frame_set, tmp_path, fake_gemini_response):

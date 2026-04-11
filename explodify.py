@@ -95,6 +95,8 @@ def main():
     print(f"[Phase 2] frame_a: {frame_set.frame_a}")
     print(f"[Phase 2] frame_b: {frame_set.frame_b}")
     print(f"[Phase 2] frame_c: {frame_set.frame_c}")
+    print(f"[Phase 2] frame_d: {frame_set.frame_d}")
+    print(f"[Phase 2] frame_e: {frame_set.frame_e}")
     if args.style_prompt:
         print(f"[Phase 2] Style prompt: {args.style_prompt}")
 

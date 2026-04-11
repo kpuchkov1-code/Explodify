@@ -9,9 +9,11 @@ from PIL import Image
 
 from pipeline.models import FrameSet, NamedMesh, PipelineMetadata
 
-CAMERA_ANGLES_DEG = [0.0, 15.0, 30.0]
-EXPLOSION_FRACTIONS = [0.0, 0.5, 1.0]
-FRAME_NAMES = ["frame_a", "frame_b", "frame_c"]
+# 10° per step keeps consecutive-frame delta within FAL/Kling's safe
+# interpolation window (~15° max before the model hallucinates geometry).
+CAMERA_ANGLES_DEG = [0.0, 10.0, 20.0, 30.0, 40.0]
+EXPLOSION_FRACTIONS = [0.0, 0.25, 0.5, 0.75, 1.0]
+FRAME_NAMES = ["frame_a", "frame_b", "frame_c", "frame_d", "frame_e"]
 RESOLUTION = (1024, 768)
 
 _ANGLE_TO_CAM_DIR = {
@@ -64,6 +66,8 @@ class SnapshotRenderer:
             frame_a=frame_paths[0],
             frame_b=frame_paths[1],
             frame_c=frame_paths[2],
+            frame_d=frame_paths[3],
+            frame_e=frame_paths[4],
             metadata=metadata,
         )
 

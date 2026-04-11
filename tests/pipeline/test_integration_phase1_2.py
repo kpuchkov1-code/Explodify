@@ -5,7 +5,7 @@ from pipeline.models import FrameSet
 
 
 def test_phase1_to_phase2_full_pipeline(two_box_glb, tmp_path):
-    """Full Phase 1 + Phase 2 integration: CAD file -> 3 PNG frames."""
+    """Full Phase 1 + Phase 2 integration: CAD file -> 5 PNG frames."""
     analyzer = GeometryAnalyzer()
     named_meshes = analyzer.load(str(two_box_glb))
     master = analyzer.master_angle(named_meshes)
@@ -24,10 +24,10 @@ def test_phase1_to_phase2_full_pipeline(two_box_glb, tmp_path):
         "top", "bottom", "left", "right", "front", "back"
     }
     assert frame_set.metadata.component_count >= 2
-    assert frame_set.metadata.camera_angles_deg == [0.0, 15.0, 30.0]
+    assert frame_set.metadata.camera_angles_deg == [0.0, 10.0, 20.0, 30.0, 40.0]
     assert frame_set.metadata.source_format == ".glb"
     assert len(frame_set.metadata.component_names) >= 2
 
     print(f"\nMaster angle: {frame_set.metadata.master_angle}")
     print(f"Components: {frame_set.metadata.component_names}")
-    print(f"Frames: {frame_set.frame_a}, {frame_set.frame_b}, {frame_set.frame_c}")
+    print(f"Frames: {frame_set.frame_a}, {frame_set.frame_b}, {frame_set.frame_c}, {frame_set.frame_d}, {frame_set.frame_e}")
