@@ -184,12 +184,14 @@ class SnapshotRenderer:
         scale = np.linalg.norm(footprint.max(axis=0) - footprint.min(axis=0))
 
         # Apply rotation offset by rotating all geometry around the camera
-        # viewing axis.  This matches the CSS `rotate(Xdeg)` preview exactly —
-        # the object appears to spin in-place when viewed from the camera.
+        # viewing axis.  Negate the angle so positive degrees = clockwise in
+        # screen space, matching CSS `rotate(Xdeg)`.  trimesh follows the
+        # right-hand rule (positive = CCW when looking along axis toward
+        # camera), which is the opposite of CSS convention.
         if abs(up_rotation_deg) > 0.01:
             rot_axis = orbited / np.linalg.norm(orbited)
             rot_matrix = trimesh.transformations.rotation_matrix(
-                math.radians(up_rotation_deg), rot_axis, center,
+                math.radians(-up_rotation_deg), rot_axis, center,
             )
             for m in meshes:
                 m.apply_transform(rot_matrix)
