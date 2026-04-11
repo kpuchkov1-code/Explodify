@@ -30,9 +30,8 @@ const PIPELINE_PHRASES = [
 
 const PIPELINE_PHASES = [
   { id: 1, name: 'Geometry',  detail: 'Explosion vectors' },
-  { id: 2, name: 'Frames',    detail: '72 renders at 1920×1080' },
+  { id: 2, name: 'Render',    detail: '72 frames at 1920×1080' },
   { id: 3, name: 'Assembly',  detail: 'ffmpeg → mp4' },
-  { id: 4, name: 'AI Style',  detail: 'Kling o1 edit' },
 ]
 
 const STYLING_STAGES = [
@@ -42,15 +41,15 @@ const STYLING_STAGES = [
 ]
 
 function computeProgress(jobStatus: JobStatus | null): number {
-  if (!jobStatus) return 8
-  const phases = jobStatus.phases
-  if (phases[3] === 'done') return 90
-  if (phases[3] === 'running') return 70
-  if (phases[2] === 'done') return 55
-  if (phases[2] === 'running') return 35
-  if (phases[1] === 'done') return 20
-  if (phases[1] === 'running') return 10
-  return 8
+  if (!jobStatus) return 5
+  const p = jobStatus.phases
+  if (p[3] === 'done') return 100
+  if (p[3] === 'running') return 78
+  if (p[2] === 'done') return 65
+  if (p[2] === 'running') return 30
+  if (p[1] === 'done') return 22
+  if (p[1] === 'running') return 8
+  return 5
 }
 
 function getPhaseDisplayName(jobStatus: JobStatus | null): string {
