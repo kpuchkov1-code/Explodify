@@ -2,17 +2,13 @@
 
 interface Props {
   jobId: string
-  showBase?: boolean
 }
 
-export function VideoOutput({ jobId, showBase = false }: Props) {
+export function VideoOutput({ jobId }: Props) {
   const styledUrl = `/jobs/${jobId}/video`
-  const baseUrl = `/jobs/${jobId}/base_video`
 
   return (
-    <div className="video-output-section">
-
-      {/* Hero: styled video */}
+    <div className="video-output-section animate-fade-in">
       <div className="video-hero">
         <div className="video-hero-header">
           <div className="video-hero-title-row">
@@ -38,33 +34,6 @@ export function VideoOutput({ jobId, showBase = false }: Props) {
           />
         </div>
       </div>
-
-      {/* Comparison: base video */}
-      {showBase && (
-        <div className="video-compare">
-          <div className="video-compare-divider">
-            <span className="video-compare-label">BASE RENDER · BEFORE STYLING</span>
-            <div className="video-compare-line" />
-            <a
-              className="video-compare-dl"
-              href={baseUrl}
-              download={`explodify_base_${jobId}.mp4`}
-            >
-              ↓ mp4
-            </a>
-          </div>
-          <div className="video-compare-player-wrap">
-            <video
-              src={baseUrl}
-              controls
-              loop
-              playsInline
-              className="video-compare-player"
-            />
-          </div>
-        </div>
-      )}
-
     </div>
   )
 }

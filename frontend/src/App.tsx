@@ -5,7 +5,6 @@ import { OrientationPicker } from './components/OrientationPicker'
 import { StylePanel } from './components/StylePanel'
 import { IdleOutput } from './components/IdleOutput'
 import { LoadingOutput } from './components/LoadingOutput'
-import { FramesOutput } from './components/FramesOutput'
 import { VideoOutput } from './components/VideoOutput'
 import { getPreviewImages, createJob, getJobStatus, approvePhase4 } from './api/client'
 import type { JobStatus, FaceName, PreviewResult } from './api/client'
@@ -300,10 +299,7 @@ export default function App() {
         )}
 
         {state === 'done' && jobId && (
-          <div className="output-stack animate-fade-in">
-            <FramesOutput jobId={jobId} />
-            <VideoOutput jobId={jobId} showBase />
-          </div>
+          <VideoOutput jobId={jobId} />
         )}
 
         {state === 'error' && (
