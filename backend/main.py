@@ -158,12 +158,29 @@ def get_frame(job_id: str, frame_name: str):
     job = jobs.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job.status != "done":
+    if job.status not in ("running", "done"):
         raise HTTPException(status_code=425, detail="Frames not ready yet")
     frame_path = UPLOAD_DIR / job_id / "raw" / f"{frame_name}.png"
     if not frame_path.exists():
         raise HTTPException(status_code=404, detail=f"{frame_name}.png not found")
     return FileResponse(str(frame_path), media_type="image/png")
+
+
+@app.get("/jobs/{job_id}/video")
+def get_video(job_id: str):
+    """Serve the final styled mp4 produced by Phase 4."""
+    job = jobs.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != "done":
+        raise HTTPException(status_code=425, detail="Video not ready yet")
+    video_path = UPLOAD_DIR / job_id / "final_video.mp4"
+    if not video_path.exists():
+        # Fall back to the raw assembled video if phase 4 wasn't run
+        video_path = UPLOAD_DIR / job_id / "base_video.mp4"
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    return FileResponse(str(video_path), media_type="video/mp4")
 
 
 async def _run_pipeline(
@@ -175,29 +192,34 @@ async def _run_pipeline(
     rotation_offset_deg: float = 0.0,
     orbit_range_deg: float = 40.0,
 ) -> None:
-    """Run all 4 pipeline phases in a background asyncio task."""
+    """Run all 4 pipeline phases in a background asyncio task.
+
+    Phase 1 — Geometry: load mesh, compute explosion vectors.
+    Phase 2 — Render:   5 preview PNGs (UI) + 72 video frames at 1920x1080.
+    Phase 3 — Assemble: ffmpeg assembles 72 frames → base_video.mp4 (3s, 24fps).
+    Phase 4 — Style:    Kling o1 edit applies studio style to base video.
+    """
     output_dir = UPLOAD_DIR / job_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Phase 1 — load geometry and compute explosion vectors.
-        # master_angle is provided by the user from the orientation picker,
-        # so we skip the automatic master_angle() computation.
+        # ── Phase 1: geometry ──────────────────────────────────────────────
         jobs.update_phase(job_id, 1, "running")
         from pipeline.phase1_geometry import GeometryAnalyzer
         analyzer = GeometryAnalyzer()
-        # File loading is thread-safe; use to_thread to avoid blocking event loop.
         meshes = await asyncio.to_thread(analyzer.load, str(cad_path))
         vectors = await asyncio.to_thread(analyzer.explosion_vectors, meshes, scalar)
         jobs.update_phase(job_id, 1, "done")
 
-        # Phase 2 — pyrender rendering must run on the OS main thread on macOS
-        # (pyglet/Cocoa restriction).  We call it synchronously here; the asyncio
-        # task itself runs on the main thread so this is safe.
+        # ── Phase 2: render ────────────────────────────────────────────────
+        # pyrender uses OpenGL and must run on the main thread on macOS.
+        # The asyncio task runs on the main thread, so calling synchronously is safe.
         jobs.update_phase(job_id, 2, "running")
         from pipeline.phase2_snapshots import SnapshotRenderer
         renderer = SnapshotRenderer()
-        frame_set = renderer.render(
+
+        # 2a — 5 preview keyframes for the UI (fast, low-res)
+        renderer.render(
             meshes,
             vectors,
             master_angle,
@@ -207,16 +229,53 @@ async def _run_pipeline(
             orbit_range_deg,
             rotation_offset_deg,
         )
+
+        # 2b — 72 video frames at 1920×1080 for ffmpeg assembly
+        renderer.render_video_frames(
+            meshes,
+            vectors,
+            master_angle,
+            output_dir / "video_frames",
+            num_frames=72,
+            orbit_range_deg=orbit_range_deg,
+            rotation_offset_deg=rotation_offset_deg,
+        )
         jobs.update_phase(job_id, 2, "done")
 
-        # Phases 3 & 4 (Gemini stylization + FAL video) are skipped for now.
-        # Mark phase 3 and 4 as done immediately so the frontend sees completion.
+        # ── Phase 3: ffmpeg assembly ───────────────────────────────────────
+        jobs.update_phase(job_id, 3, "running")
+        from pipeline.phase3_assemble import FrameAssembler
+        assembler = FrameAssembler()
+        base_video = await asyncio.to_thread(
+            assembler.assemble,
+            output_dir / "video_frames",
+            output_dir / "base_video.mp4",
+        )
         jobs.update_phase(job_id, 3, "done")
+
+        # ── Phase 4: Kling o1 edit ─────────────────────────────────────────
+        fal_key = os.environ.get("FAL_KEY", "")
+        if not fal_key:
+            # No FAL key configured — mark done with just the raw video
+            import logging
+            logging.warning("FAL_KEY not set; skipping Phase 4 Kling edit")
+            jobs.update_phase(job_id, 4, "done")
+            jobs.mark_done(job_id, None)
+            return
+
+        jobs.update_phase(job_id, 4, "running")
+        from pipeline.phase4_video import KlingVideoEditor
+        editor = KlingVideoEditor(fal_key=fal_key)
+        await editor.edit(
+            base_video,
+            style_prompt,
+            output_dir / "final_video.mp4",
+        )
         jobs.update_phase(job_id, 4, "done")
 
         jobs.mark_done(job_id, None)
 
-    except Exception as e:
+    except Exception as exc:
         current_job = jobs.get_job(job_id)
         phase = current_job.current_phase if current_job else 1
-        jobs.mark_error(job_id, phase, str(e))
+        jobs.mark_error(job_id, phase, str(exc))

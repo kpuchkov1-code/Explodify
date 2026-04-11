@@ -5,9 +5,9 @@ from backend.models import JobStatus, PhaseStatus
 
 PHASE_NAMES = {
     1: "Geometric analysis",
-    2: "Rendering keyframes",
-    3: "AI stylization",
-    4: "Video synthesis",
+    2: "Rendering frames",
+    3: "Assembling video",
+    4: "Kling style edit",
 }
 
 # In-memory store: job_id → JobStatus

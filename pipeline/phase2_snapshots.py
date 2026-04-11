@@ -36,8 +36,54 @@ _ANGLE_TO_CAM_DIR = {
 }
 
 
+VIDEO_FRAMES = 72          # frames for the assembled video (3s @ 24 fps)
+VIDEO_RESOLUTION = (1920, 1080)  # render resolution for video frames
+
+
 class SnapshotRenderer:
-    """Phase 2: Render 5 PNG keyframes at 0%-100% explosion."""
+    """Phase 2: Render 5 PNG keyframes + 72-frame video sequence."""
+
+    def render_video_frames(
+        self,
+        named_meshes: List[NamedMesh],
+        explosion_vectors: dict,
+        master_angle: str,
+        output_dir: Path,
+        num_frames: int = VIDEO_FRAMES,
+        orbit_range_deg: float = DEFAULT_ORBIT_RANGE_DEG,
+        rotation_offset_deg: float = 0.0,
+    ) -> Path:
+        """Render num_frames PNGs at VIDEO_RESOLUTION for ffmpeg assembly (Phase 3).
+
+        Frames are named video_0000.png … video_NNNN.png.
+        Explosion and orbit are linearly interpolated from 0 to 100% across all frames.
+
+        Returns:
+            output_dir path containing the frames.
+        """
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        meshes = [nm.mesh for nm in named_meshes]
+        cam_dir = _pick_camera_direction(meshes, master_angle)
+
+        for i in range(num_frames):
+            t = i / max(num_frames - 1, 1)   # 0.0 … 1.0
+            fraction = t
+            orbit_deg = orbit_range_deg * t
+
+            exploded = self._apply_explosion(meshes, explosion_vectors, fraction)
+            img = self._render_scene(
+                exploded, cam_dir, orbit_deg,
+                up_rotation_deg=rotation_offset_deg,
+                resolution=VIDEO_RESOLUTION,
+            )
+            img.save(str(output_dir / f"video_{i:04d}.png"))
+
+            if i % 18 == 0:
+                print(f"[Phase 3 render] {i + 1}/{num_frames} frames")
+
+        return output_dir
 
     def render(
         self,
