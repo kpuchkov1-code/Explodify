@@ -1,34 +1,33 @@
 # pipeline/prompt_interpreter.py
 """Prompt interpreter for Phase 4 (Kling video-to-video edit).
 
-Kling o1 edit transforms the visual style of a video while preserving its
-motion.  The prompt must accomplish two things at once:
+Builds a structured prompt that balances two competing goals:
 
-  1. PRESERVE geometry, motion, timing, and camera exactly as-is.
-  2. APPLY materials, lighting, and environment convincingly.
+  1. GEOMETRIC FIDELITY — preserve every part's shape, silhouette, count,
+     position, motion path, and timing frame-for-frame.
+  2. MATERIAL REALISM — apply convincing PBR surfaces, lighting, and
+     environment so the result looks like a real product photograph.
 
-This module builds a structured prompt from user inputs (material description,
-style toggles, free-text notes) by filling a template with dedicated sections.
-Each section is tuned for how Kling interprets video-to-video edit prompts:
+Kling o1 video-to-video edit is a style-transfer model: it can change
+materials and lighting but tends to drift on geometry if the prompt
+doesn't repeatedly anchor it.  The template therefore:
 
-  - MOTION section:   anchors Kling to the source video's geometry.
-  - MATERIAL section:  per-component surface descriptions.
-  - LIGHTING section:  key/fill/rim/ambient setup.
-  - ENVIRONMENT section: backdrop, ground plane, atmosphere.
-  - CAMERA section:    reinforces "do not change the camera."
-
-The template uses short, declarative sentences.  Kling responds better to
-concrete visual descriptions ("brushed aluminium with fine radial grain")
-than abstract instructions ("make it look professional").
+  - Opens and closes with geometry-lock language (bookending).
+  - Uses concrete, measurable visual descriptions instead of vague
+    adjectives ("0.3mm radial brush marks" not "nice metal finish").
+  - Specifies negative constraints explicitly ("no bloom, no glow")
+    because Kling's default aesthetic leans cinematic.
+  - Keeps total prompt length under ~600 tokens to avoid truncation
+    in the Kling tokeniser.
 
 Usage:
     from pipeline.prompt_interpreter import build_fal_prompt
 
     prompt = build_fal_prompt(
-        material_prompt="brushed aluminium body, matte black cap, frosted glass lens",
-        style_prompt="warm amber tone, subtle ground shadow",
-        lighting="studio",       # from checkbox toggles
-        backdrop="dark",         # from checkbox toggles
+        material_prompt="brushed aluminium body, matte black cap",
+        style_prompt="warm amber tone",
+        lighting="studio",
+        backdrop="dark",
         component_names=["body", "cap", "lens", "spring"],
     )
 """
@@ -41,64 +40,122 @@ from dataclasses import dataclass, field
 # Template sections
 # ---------------------------------------------------------------------------
 
-_MOTION = (
-    "Photorealistic product render of a mechanical assembly. "
-    "Preserve every component's shape, position, motion, and timing "
-    "exactly as shown in the source video. Do not add, remove, or "
-    "reposition any parts. Do not alter the camera path."
+# Geometry lock — repeated at top and bottom to bookend the prompt.
+# Kling weights early and late tokens most heavily.
+_GEOMETRY_LOCK_OPEN = (
+    "Photorealistic product-photography render of an exploded mechanical "
+    "assembly. CRITICAL: preserve the exact silhouette, part count, "
+    "spatial arrangement, motion trajectory, and timing of every "
+    "component as shown in the source video. Do not add, remove, merge, "
+    "split, warp, or reposition any part. Maintain hard edges and "
+    "mechanical precision — no organic softening of corners or edges."
 )
 
+_GEOMETRY_LOCK_CLOSE = (
+    "FINAL CHECK: the output must be frame-for-frame identical in "
+    "geometry, part count, and motion to the input video. Any shape "
+    "deviation, missing component, or added element is a failure."
+)
+
+# Lighting presets — concrete descriptions with measurable properties
 _LIGHTING_PRESETS: dict[str, str] = {
     "studio": (
-        "Three-point studio lighting: soft key light from upper-left at 45 degrees, "
-        "cool fill light from right at low intensity, subtle rim light from behind "
-        "to separate components from the backdrop. Soft shadows, no harsh specular."
+        "Three-point product-photography lighting. "
+        "Key: large softbox upper-left at 45 degrees, diffused, intensity 1.0. "
+        "Fill: rectangular softbox from right at 0.3 intensity, cool-neutral 5600K. "
+        "Rim: narrow strip light from behind at 0.4 intensity to edge-separate "
+        "components from the backdrop. All shadows soft with penumbra, no hard "
+        "cast shadows. No specular bloom or glare."
     ),
     "warm": (
-        "Warm studio lighting: golden key light from upper-left, soft amber fill, "
-        "gentle warm rim light. Shadows are soft with warm undertones."
+        "Warm product-photography lighting. "
+        "Key: large softbox upper-left, warm 3800K, intensity 1.0. "
+        "Fill: soft amber bounce from right at 0.25 intensity. "
+        "Rim: gentle warm edge light from behind at 0.3 intensity. "
+        "Shadows soft with warm undertones. No blown highlights."
     ),
     "cold": (
-        "Cool clinical lighting: bright blue-white key light from above, "
-        "neutral fill from the sides, crisp shadows. Medical-device aesthetic."
+        "Cool clinical product lighting. "
+        "Key: overhead panel light, daylight 6500K, intensity 1.0. "
+        "Fill: neutral side panels at 0.4 intensity. "
+        "Rim: cool blue-white edge light at 0.3 intensity. "
+        "Crisp shadows, high contrast. Medical/technical device aesthetic."
     ),
     "natural": (
-        "Natural indirect lighting as if near a large north-facing window. "
-        "Soft even illumination, minimal shadows, neutral colour temperature."
+        "Natural indirect lighting from a large north-facing window. "
+        "Even, soft illumination with minimal directional shadow. "
+        "Neutral 5500K colour temperature. No artificial rim or accent lights."
     ),
 }
 
+# Backdrop presets
 _BACKDROP_PRESETS: dict[str, str] = {
     "dark": (
-        "Dark studio backdrop, nearly black with a subtle gradient. "
-        "Polished dark ground plane showing faint reflections of the components."
+        "Dark studio backdrop: near-black (#0a0a0a) with a subtle vertical "
+        "gradient to dark grey at the base. Polished dark ground plane showing "
+        "faint specular reflections of the nearest components only. "
+        "No environment reflections on the backdrop itself."
     ),
     "white": (
-        "Clean infinite white background, no visible horizon line. "
-        "Soft ground-plane shadow directly beneath the assembly."
+        "Infinite white cyclorama background, no visible horizon or seam. "
+        "Soft contact shadow directly beneath the assembly on the ground plane. "
+        "No colour spill from the backdrop onto the components."
     ),
     "gradient": (
-        "Smooth dark-to-mid-grey vertical gradient backdrop. "
-        "Subtle ground plane with soft contact shadows."
+        "Smooth vertical gradient from dark charcoal (#1a1a1a) at top to "
+        "mid-grey (#3a3a3a) at the base. Subtle ground plane with soft "
+        "contact shadows. No visible horizon line."
     ),
 }
 
+# Default materials when user provides none
 _DEFAULT_MATERIAL = (
-    "Each component rendered with physically accurate materials: "
-    "machined metal surfaces with fine tooling marks, subtle anodisation, "
-    "accurate Fresnel reflections. Plastic parts have slight subsurface "
-    "scattering. Glass and transparent elements show realistic refraction."
+    "Apply physically based materials to every component: "
+    "metal parts get machined aluminium with fine concentric tooling marks "
+    "(0.3mm spacing), subtle anodisation colour variation, and accurate "
+    "Fresnel reflections at glancing angles. "
+    "Plastic parts: smooth injection-moulded finish with slight subsurface "
+    "scattering and faint parting-line seams. "
+    "Rubber/elastomer parts: matte black with micro-texture grain. "
+    "Glass elements: clear with realistic refraction (IOR 1.52) and "
+    "anti-reflective coating hints. "
+    "Fasteners (screws, bolts): zinc-plated steel with knurling detail."
 )
 
+# Rendering constraints — tells Kling what NOT to do
+_NEGATIVE_CONSTRAINTS = (
+    "Do NOT add any of the following: bloom, glow, lens flare, chromatic "
+    "aberration, film grain, vignette, motion blur, depth-of-field bokeh, "
+    "atmospheric haze, dust particles, smoke, sparks, reflections of "
+    "objects not in the scene, text overlays, watermarks, or UI elements. "
+    "Do NOT change the number of components. Do NOT merge adjacent parts "
+    "into a single surface. Do NOT add bevels or fillets that are not in "
+    "the source geometry."
+)
+
+# Camera lock
 _CAMERA = (
-    "Camera: match the source video exactly. Same focal length, same orbit "
-    "path, same timing. No zoom, no shake, no post-processing effects."
+    "Camera: replicate the source video exactly — same focal length, "
+    "same orbit path, same speed, same timing. No zoom, no handheld "
+    "shake, no rack focus, no dolly moves not present in the original."
 )
 
+# Technical quality
 _QUALITY = (
-    "8K product photography quality. Shallow depth of field with all "
-    "components in focus. No motion blur. No lens flare. No vignette. "
-    "No watermarks or text overlays."
+    "Render quality: 8K product photography. All components tack-sharp "
+    "edge to edge. Consistent exposure across all frames — no flicker "
+    "or per-frame brightness variation. Colour-accurate — no colour "
+    "grading shifts between frames. Clean anti-aliased edges on every "
+    "component silhouette."
+)
+
+# Temporal consistency — prevents Kling from drifting between frames
+_TEMPORAL = (
+    "Temporal consistency: materials, lighting, and reflections must be "
+    "stable across every frame. No shimmer, flicker, or material "
+    "popping between frames. Surface properties must track with the "
+    "geometry as parts move — specular highlights slide naturally "
+    "across surfaces during motion, they do not jump or disappear."
 )
 
 
@@ -146,10 +203,10 @@ def build_fal_prompt(
     """
     sections: list[str] = []
 
-    # 1. Motion preservation (always first -- highest priority for Kling)
-    sections.append(_MOTION)
+    # 1. Geometry lock — OPEN (highest priority, first tokens)
+    sections.append(_GEOMETRY_LOCK_OPEN)
 
-    # 2. Materials
+    # 2. Materials — user-specific or rich defaults
     sections.append(_build_material_section(material_prompt, component_names or []))
 
     # 3. Lighting
@@ -163,13 +220,24 @@ def build_fal_prompt(
         env = env.replace("shadow", "").replace("reflection", "")
     sections.append(env)
 
-    # 5. Free-text style notes (user's extras -- appended, not dominant)
+    # 5. Free-text style notes (user's extras)
     if style_prompt.strip():
-        sections.append(f"Additional style: {style_prompt.strip()}")
+        sections.append(f"Additional style direction: {style_prompt.strip()}.")
 
-    # 6. Camera lock + quality (always last -- reinforcement)
+    # 6. Negative constraints — what Kling must NOT add
+    sections.append(_NEGATIVE_CONSTRAINTS)
+
+    # 7. Camera lock
     sections.append(_CAMERA)
+
+    # 8. Technical quality
     sections.append(_QUALITY)
+
+    # 9. Temporal consistency
+    sections.append(_TEMPORAL)
+
+    # 10. Geometry lock — CLOSE (reinforcement, last tokens)
+    sections.append(_GEOMETRY_LOCK_CLOSE)
 
     return " ".join(sections)
 
@@ -184,9 +252,9 @@ def _build_material_section(
 ) -> str:
     """Build the material description section.
 
-    If the user provided material text, use it directly.  If component names
-    are available, prefix with a part inventory so Kling can ground materials
-    to specific geometry.
+    If the user provided material text, use it directly with PBR
+    grounding language.  If component names are available, prefix with
+    a part inventory so Kling can map materials to specific geometry.
     """
     if not material_prompt.strip():
         return _DEFAULT_MATERIAL
@@ -195,13 +263,17 @@ def _build_material_section(
 
     # Give Kling a parts list so it can map materials to geometry
     if component_names:
-        names = ", ".join(component_names[:12])  # cap to avoid prompt bloat
+        names = ", ".join(component_names[:12])
         parts.append(f"Assembly components: {names}.")
 
     parts.append(f"Materials: {material_prompt.strip()}.")
     parts.append(
-        "Apply each material with physically accurate properties: "
-        "correct Fresnel reflections, surface roughness, and specularity."
+        "Apply each material with physically based rendering properties: "
+        "correct Fresnel reflections at glancing angles, appropriate surface "
+        "roughness (smooth metals ~0.15, matte plastics ~0.6, rubber ~0.85), "
+        "accurate index of refraction for transparent elements. "
+        "Preserve micro-detail: tooling marks on machined surfaces, "
+        "parting lines on injection-moulded plastics, knurling on fasteners."
     )
 
     return " ".join(parts)
