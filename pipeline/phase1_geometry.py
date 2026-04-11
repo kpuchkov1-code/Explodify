@@ -87,11 +87,16 @@ class GeometryAnalyzer:
             axis_v = np.cross(ray_dir, axis_u)
             axis_v /= np.linalg.norm(axis_v)
 
-            span = max_extent * 0.6
+            # Use per-direction projected extents so the grid covers the
+            # actual footprint from this viewpoint, not the global max extent.
+            proj_u = all_verts @ axis_u
+            proj_v = all_verts @ axis_v
+            span_u = (proj_u.max() - proj_u.min()) * 0.45
+            span_v = (proj_v.max() - proj_v.min()) * 0.45
             grid = np.array(
                 [[du * axis_u + dv * axis_v
-                  for du in np.linspace(-span, span, 5)]
-                 for dv in np.linspace(-span, span, 5)],
+                  for du in np.linspace(-span_u, span_u, 5)]
+                 for dv in np.linspace(-span_v, span_v, 5)],
                 dtype=float,
             ).reshape(25, 3)
 
@@ -100,7 +105,7 @@ class GeometryAnalyzer:
             directions = np.tile(ray_dir, (25, 1))
 
             try:
-                _, _index_ray, index_tri = combined.ray.intersects_id(
+                index_tri, _index_ray = combined.ray.intersects_id(
                     ray_origins=origins,
                     ray_directions=directions,
                     multiple_hits=False,
@@ -114,6 +119,39 @@ class GeometryAnalyzer:
                 best_direction = name
 
         return best_direction
+
+    def reorient(self, named_meshes: List[NamedMesh]) -> List[NamedMesh]:
+        """Rotate the assembly so its longest bounding-box axis aligns with Y (up).
+
+        Tinkercad and some CAD exporters place models lying on their side.
+        This rotates the whole assembly 90° so the longest dimension stands
+        vertically, giving the renderer a natural upright orientation.
+
+        Args:
+            named_meshes: Component meshes (from load()).
+
+        Returns:
+            New list of NamedMesh with meshes rotated in place.  Returns the
+            original list unchanged if the longest axis is already Y.
+        """
+        meshes = [nm.mesh for nm in named_meshes]
+        all_verts = np.vstack([m.vertices for m in meshes])
+        extents = all_verts.max(axis=0) - all_verts.min(axis=0)  # [X_ext, Y_ext, Z_ext]
+        longest = int(np.argmax(extents))
+
+        if longest == 1:
+            return named_meshes  # already upright
+
+        if longest == 2:  # Z longest — rotate -90 deg around X
+            angle, axis = -np.pi / 2, np.array([1.0, 0.0, 0.0])
+        else:             # X longest — rotate  90 deg around Z
+            angle, axis = np.pi / 2, np.array([0.0, 0.0, 1.0])
+
+        R = trimesh.transformations.rotation_matrix(angle, axis)
+        return [
+            NamedMesh(name=nm.name, mesh=nm.mesh.copy().apply_transform(R))
+            for nm in named_meshes
+        ]
 
     def explosion_vectors(
         self, named_meshes: List[NamedMesh], scalar: float

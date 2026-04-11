@@ -36,13 +36,14 @@ def test_master_angle_returns_valid_direction(two_box_glb):
 
 
 def test_master_angle_hits_most_unique_meshes(two_box_glb):
-    """For two boxes separated on X axis, front/back sees both side-by-side
-    (each X-grid ray hits a different box). Left/right only return the nearer
-    box as the first intersection per ray (single-hit cast)."""
+    """For two boxes separated on the X axis the optimal direction must see
+    both components.  Any view where both boxes appear side-by-side qualifies:
+    top/bottom (XZ footprint), front/back (XY footprint).  Left/right aim
+    along X so the farther box is occluded — those are incorrect answers."""
     analyzer = GeometryAnalyzer()
     named_meshes = analyzer.load(str(two_box_glb))
     direction = analyzer.master_angle(named_meshes)
-    assert direction in {"front", "back"}
+    assert direction in {"top", "bottom", "front", "back"}
 
 
 def test_explosion_vectors_count_matches_meshes(two_box_glb):

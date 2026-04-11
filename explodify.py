@@ -70,6 +70,9 @@ def main():
     for nm in named_meshes:
         print(f"          - {nm.name}  ({len(nm.mesh.faces)} faces)")
 
+    named_meshes = analyzer.reorient(named_meshes)
+    print("[Phase 1] Assembly reoriented (longest axis → vertical)")
+
     master = analyzer.master_angle(named_meshes)
     print(f"[Phase 1] Master angle: {master}")
 
