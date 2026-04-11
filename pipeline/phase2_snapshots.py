@@ -7,7 +7,7 @@ import numpy as np
 import trimesh
 from PIL import Image
 
-from pipeline.models import FrameSet, PipelineMetadata
+from pipeline.models import FrameSet, NamedMesh, PipelineMetadata
 
 # Camera orbit angles per frame (degrees)
 CAMERA_ANGLES_DEG = [0.0, 15.0, 30.0]
@@ -32,26 +32,30 @@ class SnapshotRenderer:
 
     def render(
         self,
-        meshes: List[trimesh.Trimesh],
+        named_meshes: List[NamedMesh],
         explosion_vectors: dict,
         master_angle: str,
         output_dir: Path,
         scalar: float,
+        source_format: str = "",
     ) -> FrameSet:
         """Render 3 PNG snapshots and return a FrameSet.
 
         Args:
-            meshes: Component meshes from GeometryAnalyzer.load().
+            named_meshes: Component meshes from GeometryAnalyzer.load().
             explosion_vectors: Per-mesh displacement vectors.
             master_angle: Optimal direction name from GeometryAnalyzer.master_angle().
             output_dir: Directory to write frame_a.png, frame_b.png, frame_c.png.
             scalar: Explosion scalar stored in metadata.
+            source_format: File extension of the input (stored in metadata).
 
         Returns:
             FrameSet with paths to 3 PNGs and PipelineMetadata.
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        meshes = [nm.mesh for nm in named_meshes]
 
         frame_paths = []
         for fraction, orbit_deg, name in zip(
@@ -66,8 +70,10 @@ class SnapshotRenderer:
         metadata = PipelineMetadata(
             master_angle=master_angle,
             explosion_scalar=scalar,
-            component_count=len(meshes),
+            component_count=len(named_meshes),
             camera_angles_deg=CAMERA_ANGLES_DEG,
+            source_format=source_format,
+            component_names=[nm.name for nm in named_meshes],
         )
         return FrameSet(
             frame_a=frame_paths[0],

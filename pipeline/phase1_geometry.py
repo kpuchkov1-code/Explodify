@@ -5,6 +5,9 @@ from typing import List
 import numpy as np
 import trimesh
 
+from pipeline.format_loader import load_assembly
+from pipeline.models import NamedMesh
+
 
 class GeometryAnalyzer:
     """Phase 1: Load a CAD file and compute optimal viewing angle + explosion vectors."""
@@ -19,44 +22,34 @@ class GeometryAnalyzer:
         "back":   (np.array([0,  0,-10], dtype=float), np.array([ 0,  0,  1], dtype=float)),
     }
 
-    def load(self, path: str) -> List[trimesh.Trimesh]:
-        """Load a CAD/mesh file and return a flat list of component meshes.
+    def load(self, path: str) -> List[NamedMesh]:
+        """Load a CAD/mesh file and return a list of named component meshes.
+
+        Delegates to format_loader which handles STEP, GLB, OBJ, STL, etc.
 
         Args:
-            path: Path to .glb, .obj, or .stl file.
+            path: Path to .step, .stp, .glb, .obj, .stl, or other supported file.
 
         Returns:
-            List of trimesh.Trimesh, one per component in the assembly.
+            List of NamedMesh with one entry per non-empty assembly component.
 
         Raises:
             FileNotFoundError: If path does not exist.
+            UnsupportedFormatError: If the format is not supported.
         """
-        if not Path(path).exists():
-            raise FileNotFoundError(f"CAD file not found: {path}")
+        return load_assembly(path)
 
-        loaded = trimesh.load(path, force="scene")
-
-        if isinstance(loaded, trimesh.Scene):
-            meshes = [
-                geom for geom in loaded.geometry.values()
-                if isinstance(geom, trimesh.Trimesh) and len(geom.faces) > 0
-            ]
-        elif isinstance(loaded, trimesh.Trimesh):
-            meshes = [loaded]
-        else:
-            meshes = list(loaded.geometry.values())
-
-        return meshes
-
-    def master_angle(self, meshes: List[trimesh.Trimesh]) -> str:
-        """Find the cardinal direction that hits the highest number of unique mesh IDs.
+    def master_angle(self, named_meshes: List[NamedMesh]) -> str:
+        """Find the cardinal direction that hits the highest number of unique components.
 
         Args:
-            meshes: List of component meshes (from load()).
+            named_meshes: Component meshes (from load()).
 
         Returns:
             Direction name: one of "top", "bottom", "left", "right", "front", "back".
         """
+        meshes = [nm.mesh for nm in named_meshes]
+
         all_vertices = []
         all_faces = []
         face_to_mesh = []
@@ -75,21 +68,17 @@ class GeometryAnalyzer:
         )
         face_to_mesh = np.array(face_to_mesh)
 
-        assembly_centroid = np.mean([m.centroid for m in meshes], axis=0)
-
-        # Compute assembly bounding box for grid scaling
-        all_verts = np.vstack([m.vertices for m in meshes])
+        all_verts = np.vstack(all_vertices)
         bounds_min = all_verts.min(axis=0)
         bounds_max = all_verts.max(axis=0)
-        extents = bounds_max - bounds_min
-        max_extent = max(extents.max(), 0.1)
+        max_extent = max((bounds_max - bounds_min).max(), 0.1)
+
+        assembly_centroid = np.mean([m.centroid for m in meshes], axis=0)
 
         best_direction = "front"
         best_count = -1
 
         for name, (offset, ray_dir) in self._DIRECTIONS.items():
-            # Build two axes perpendicular to ray_dir for the ray grid
-            # Choose a stable up vector not parallel to ray_dir
             up = np.array([0.0, 1.0, 0.0])
             if abs(np.dot(ray_dir, up)) > 0.9:
                 up = np.array([1.0, 0.0, 0.0])
@@ -106,13 +95,12 @@ class GeometryAnalyzer:
                 dtype=float,
             ).reshape(25, 3)
 
-            # Scale offset to be far enough from the assembly
             scaled_offset = ray_dir * -max_extent * 4
             origins = assembly_centroid + scaled_offset + grid
             directions = np.tile(ray_dir, (25, 1))
 
             try:
-                _, index_ray, index_tri = combined.ray.intersects_id(
+                _, _index_ray, index_tri = combined.ray.intersects_id(
                     ray_origins=origins,
                     ray_directions=directions,
                     multiple_hits=False,
@@ -128,19 +116,20 @@ class GeometryAnalyzer:
         return best_direction
 
     def explosion_vectors(
-        self, meshes: List[trimesh.Trimesh], scalar: float
+        self, named_meshes: List[NamedMesh], scalar: float
     ) -> dict[int, np.ndarray]:
         """Compute outward explosion vector for each mesh component.
 
         v_i = (centroid_i - centroid_assembly) * scalar
 
         Args:
-            meshes: List of component meshes.
+            named_meshes: Component meshes (from load()).
             scalar: Explosion multiplier E.
 
         Returns:
             Dict mapping mesh index -> 3D numpy displacement vector.
         """
+        meshes = [nm.mesh for nm in named_meshes]
         assembly_centroid = np.mean([m.centroid for m in meshes], axis=0)
         return {
             i: (mesh.centroid - assembly_centroid) * scalar
