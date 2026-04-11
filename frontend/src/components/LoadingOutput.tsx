@@ -43,15 +43,16 @@ const STYLING_STAGES = [
 const TOTAL_STYLING_SECS = 180
 
 function computeProgress(jobStatus: JobStatus | null): number {
-  if (!jobStatus) return 5
+  // Front-loaded: jumps quickly early, slows later (feels faster)
+  if (!jobStatus) return 12
   const p = jobStatus.phases
   if (p[3] === 'done') return 100
-  if (p[3] === 'running') return 78
-  if (p[2] === 'done') return 65
-  if (p[2] === 'running') return 30
-  if (p[1] === 'done') return 22
-  if (p[1] === 'running') return 8
-  return 5
+  if (p[3] === 'running') return 82
+  if (p[2] === 'done') return 72
+  if (p[2] === 'running') return 40
+  if (p[1] === 'done') return 30
+  if (p[1] === 'running') return 18
+  return 12
 }
 
 function getPhaseDisplayName(jobStatus: JobStatus | null): string {
@@ -106,16 +107,20 @@ function StylingLoader() {
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    const t = setInterval(() => setTick(n => n + 1), 70)
+    const t = setInterval(() => setTick(n => n + 1), 45)
     return () => clearInterval(t)
   }, [])
 
   const stageIdx = STYLING_STAGES.findIndex(s => s.key === stage)
   const currentStage = STYLING_STAGES[stageIdx]
 
-  // Progress: smooth fill capped at 95% until actually done
-  const rawProgress = Math.min((elapsedSecs / TOTAL_STYLING_SECS) * 100, 95)
-  const progressPct = rawProgress
+  // Logarithmic progress curve: jumps to ~40% quickly, then crawls.
+  // Feels fast early on even though the total wait is ~3 min.
+  const t = Math.min(elapsedSecs / TOTAL_STYLING_SECS, 1)
+  const progressPct = Math.min(95, t < 0.15
+    ? t * 300          // 0-45% in first 27s
+    : 45 + (1 - Math.exp(-4 * (t - 0.15))) * 50  // 45-95% logarithmic
+  )
 
   const isOverTime = elapsedSecs > TOTAL_STYLING_SECS
 
@@ -227,17 +232,17 @@ function StandardLoader({ phase, jobStatus }: { phase: 'orientation' | 'pipeline
       setTimeout(() => {
         setPhraseIndex(i => (i + 1) % phrases.length)
         setFading(false)
-      }, 350)
-    }, 2800)
+      }, 150)
+    }, 1800)
     return () => clearInterval(timer)
   }, [phrases.length])
 
   useEffect(() => {
-    const t = setInterval(() => setTick(n => n + 1), 80)
+    const t = setInterval(() => setTick(n => n + 1), 50)
     return () => clearInterval(t)
   }, [])
 
-  const progress = phase === 'orientation' ? 20 : computeProgress(jobStatus)
+  const progress = phase === 'orientation' ? 18 : computeProgress(jobStatus)
   const displayName = phase === 'orientation' ? 'ORIENTATION' : getPhaseDisplayName(jobStatus)
   const displayDetail = phase === 'orientation' ? 'Computing 6 face previews' : getPhaseDetail(jobStatus)
 

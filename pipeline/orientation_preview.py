@@ -10,7 +10,9 @@ from PIL import Image
 
 from pipeline.models import NamedMesh
 
-PREVIEW_RESOLUTION = (512, 384)
+# Match the video's 16:9 aspect ratio so the picker preview and video first
+# frame use the same camera frustum, preventing apparent orientation drift.
+PREVIEW_RESOLUTION = (512, 288)
 
 # Camera directions must match _ANGLE_TO_CAM_DIR in phase2_snapshots.py exactly,
 # otherwise the orientation preview shows a different angle than the final render.
