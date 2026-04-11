@@ -6,7 +6,7 @@ import { StylePanel } from './components/StylePanel'
 import { IdleOutput } from './components/IdleOutput'
 import { LoadingOutput } from './components/LoadingOutput'
 import { FramesOutput } from './components/FramesOutput'
-import { VideoPlaceholder } from './components/VideoPlaceholder'
+import { VideoOutput } from './components/VideoOutput'
 import { getPreviewImages, createJob, getJobStatus } from './api/client'
 import type { JobStatus, FaceName, PreviewResult } from './api/client'
 
@@ -266,7 +266,7 @@ export default function App() {
         {state === 'done' && jobId && (
           <div className="output-stack animate-fade-in">
             <FramesOutput jobId={jobId} />
-            <VideoPlaceholder />
+            <VideoOutput jobId={jobId} />
           </div>
         )}
 
