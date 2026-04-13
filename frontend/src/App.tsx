@@ -20,6 +20,7 @@ export interface StyleOptions {
   groundShadow: boolean
   materialPrompt: string
   prompt: string
+  componentMaterials: Record<string, string>
 }
 
 const DEFAULT_STYLE: StyleOptions = {
@@ -31,6 +32,7 @@ const DEFAULT_STYLE: StyleOptions = {
   groundShadow: true,
   materialPrompt: '',
   prompt: '',
+  componentMaterials: {},
 }
 
 export default function App() {
@@ -44,6 +46,7 @@ export default function App() {
   const [explodeScalar, setExplodeScalar] = useState(1.5)
   const [cameraZoom, setCameraZoom] = useState(1.0)
   const [styleOptions, setStyleOptions] = useState<StyleOptions>(DEFAULT_STYLE)
+  const [componentNames, setComponentNames] = useState<string[]>([])
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [selectedVariants, setSelectedVariants] = useState<Set<VariantName>>(new Set(['longest', 'shortest']))
   const [approvalSelected, setApprovalSelected] = useState<Set<VariantName>>(new Set(['longest', 'shortest']))
@@ -63,25 +66,10 @@ export default function App() {
       const result = await getPreviewImages(file)
       setPreview(result)
       setSelectedFace('front')
+      setComponentNames(result.component_names ?? [])
       setState('orientation')
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Preview failed')
-      setState('error')
-    }
-  }
-
-  async function handleLoadSample() {
-    setErrorMsg(null)
-    try {
-      setState('uploading')
-      const resp = await fetch('/preview/sample')
-      if (!resp.ok) throw new Error(`Sample load failed: ${resp.statusText}`)
-      const result: PreviewResult = await resp.json()
-      setPreview(result)
-      setSelectedFace('front')
-      setState('orientation')
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Sample load failed')
       setState('error')
     }
   }
@@ -107,6 +95,7 @@ export default function App() {
         orbitRangeDeg,
         cameraZoom,
         variantsToRender,
+        componentMaterials: styleOptions.componentMaterials,
       })
       setJobId(id)
       setJobStatus(null)
@@ -176,6 +165,7 @@ export default function App() {
     setExplodeScalar(1.5)
     setCameraZoom(1.0)
     setStyleOptions(DEFAULT_STYLE)
+    setComponentNames([])
     setSelectedVariants(new Set(['longest', 'shortest']))
     setApprovalSelected(new Set(['longest', 'shortest']))
     setRenderedSettings(null)
@@ -202,7 +192,6 @@ export default function App() {
               <div className="section-label">Input File</div>
               <UploadZone
                 onUpload={handleUpload}
-                onLoadSample={handleLoadSample}
                 loading={state === 'uploading'}
               />
             </section>
@@ -225,6 +214,7 @@ export default function App() {
                   onExplodeChange={setExplodeScalar}
                   orbitRangeDeg={orbitRangeDeg}
                   onOrbitRangeChange={setOrbitRangeDeg}
+                  componentNames={componentNames}
                   disabled={controlsDisabled}
                 />
               </section>

@@ -23,6 +23,7 @@ export type VariantName = 'longest' | 'shortest'
 export interface PreviewResult {
   preview_id: string
   images: Record<FaceName, string>
+  component_names: string[]
 }
 
 export async function getPreviewImages(file: File): Promise<PreviewResult> {
@@ -53,6 +54,7 @@ export async function createJob(
     orbitRangeDeg: number
     cameraZoom: number
     variantsToRender?: VariantName[]
+    componentMaterials?: Record<string, string>
   },
 ): Promise<string> {
   const form = new FormData()
@@ -72,6 +74,9 @@ export async function createJob(
   form.append('camera_zoom', String(options.cameraZoom))
   if (options.variantsToRender) {
     form.append('variants_to_render', options.variantsToRender.join(','))
+  }
+  if (options.componentMaterials) {
+    form.append('component_materials', JSON.stringify(options.componentMaterials))
   }
 
   const resp = await fetch('/jobs', { method: 'POST', body: form })

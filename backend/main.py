@@ -31,9 +31,6 @@ PREVIEW_DIR = Path(tempfile.gettempdir()) / "explodify_previews"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
 
-_FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "public"
-SAMPLE_OBJ = _FRONTEND_DIR / "sample.obj"
-
 VARIANT_NAMES = ("longest", "shortest")
 
 
@@ -41,35 +38,6 @@ VARIANT_NAMES = ("longest", "shortest")
 def health():
     return {"status": "ok"}
 
-
-@app.get("/preview/sample")
-async def preview_sample():
-    if not SAMPLE_OBJ.exists():
-        raise HTTPException(status_code=404, detail="Sample file not found on server.")
-
-    cached = list(PREVIEW_DIR.glob("sample_*"))
-    preview_id = cached[0].stem.replace("sample_", "") if cached else None
-
-    if not preview_id:
-        preview_id = str(uuid.uuid4())
-        dest = PREVIEW_DIR / f"{preview_id}.obj"
-        dest.write_bytes(SAMPLE_OBJ.read_bytes())
-
-    try:
-        from pipeline.format_loader import load_assembly
-        from pipeline.orientation_preview import render_orientation_previews
-        from pipeline.phase1_geometry import GeometryAnalyzer
-
-        named_meshes = load_assembly(str(PREVIEW_DIR / f"{preview_id}.obj"))
-        named_meshes = GeometryAnalyzer().reorient(named_meshes)
-        images = render_orientation_previews(named_meshes)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-
-    cached_marker = PREVIEW_DIR / f"sample_{preview_id}"
-    cached_marker.touch(exist_ok=True)
-
-    return {"preview_id": preview_id, "images": images}
 
 
 @app.post("/preview")
@@ -93,7 +61,8 @@ async def preview_orientations(file: UploadFile = File(...)):
         preview_path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail=str(exc))
 
-    return {"preview_id": preview_id, "images": images}
+    component_names = [nm.name for nm in named_meshes]
+    return {"preview_id": preview_id, "images": images, "component_names": component_names}
 
 
 @app.post("/jobs", status_code=202)
@@ -114,6 +83,7 @@ async def create_job(
     orbit_range_deg: float = Form(40.0),
     camera_zoom: float = Form(1.0),
     variants_to_render: str = Form("longest,shortest"),
+    component_materials: str = Form("{}"),
 ):
     if preview_id:
         matches = list(PREVIEW_DIR.glob(f"{preview_id}.*"))
@@ -135,6 +105,14 @@ async def create_job(
         if v.strip() in VARIANT_NAMES
     ] or list(VARIANT_NAMES)
 
+    import json as _json
+    try:
+        parsed_component_materials: dict[str, str] = _json.loads(component_materials)
+        if not isinstance(parsed_component_materials, dict):
+            parsed_component_materials = {}
+    except Exception:
+        parsed_component_materials = {}
+
     asyncio.create_task(
         _run_pipeline(
             job_id, cad_path, explode_scalar,
@@ -151,6 +129,7 @@ async def create_job(
             orbit_range_deg=orbit_range_deg,
             camera_zoom=camera_zoom,
             variants_to_render=parsed_variants,
+            component_materials=parsed_component_materials,
         )
     )
 
@@ -308,6 +287,7 @@ async def _run_pipeline(
     orbit_range_deg: float = 40.0,
     camera_zoom: float = 1.0,
     variants_to_render: list[str] | None = None,
+    component_materials: dict[str, str] | None = None,
 ) -> None:
     _variants = variants_to_render or list(VARIANT_NAMES)
     output_dir = UPLOAD_DIR / job_id
@@ -414,6 +394,7 @@ async def _run_pipeline(
             backdrop=resolve_backdrop_key(dark_backdrop, white_backdrop),
             ground_shadow=ground_shadow,
             component_names=component_names,
+            component_materials=component_materials,
         )
 
         editor = KlingVideoEditor(fal_key=fal_key)

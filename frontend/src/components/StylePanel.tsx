@@ -1,8 +1,10 @@
 // frontend/src/components/StylePanel.tsx
+import { useState } from 'react'
 import type { StyleOptions } from '../App'
 
 const MAX_MATERIAL_CHARS = 400
 const MAX_STYLE_CHARS = 400
+const MAX_PER_COMPONENT_CHARS = 120
 
 interface Props {
   options: StyleOptions
@@ -11,10 +13,11 @@ interface Props {
   onExplodeChange: (v: number) => void
   orbitRangeDeg: number
   onOrbitRangeChange: (v: number) => void
+  componentNames?: string[]
   disabled?: boolean
 }
 
-const CHECKBOX_ITEMS: Array<{ key: keyof Omit<StyleOptions, 'prompt'>; label: string }> = [
+const CHECKBOX_ITEMS: Array<{ key: keyof Omit<StyleOptions, 'prompt' | 'componentMaterials'>; label: string }> = [
   { key: 'studioLighting', label: 'Studio lighting' },
   { key: 'darkBackdrop',   label: 'Dark backdrop' },
   { key: 'whiteBackdrop',  label: 'White backdrop' },
@@ -30,11 +33,23 @@ export function StylePanel({
   onExplodeChange,
   orbitRangeDeg,
   onOrbitRangeChange,
+  componentNames = [],
   disabled,
 }: Props) {
-  function toggleOption(key: keyof Omit<StyleOptions, 'prompt'>) {
+  const [perComponentOpen, setPerComponentOpen] = useState(false)
+
+  function toggleOption(key: keyof Omit<StyleOptions, 'prompt' | 'componentMaterials'>) {
     onOptionsChange({ ...options, [key]: !options[key] })
   }
+
+  function setComponentMaterial(name: string, value: string) {
+    onOptionsChange({
+      ...options,
+      componentMaterials: { ...options.componentMaterials, [name]: value },
+    })
+  }
+
+  const hasComponents = componentNames.length > 0
 
   return (
     <div className="style-panel">
@@ -77,6 +92,40 @@ export function StylePanel({
         <span className="char-counter">{options.materialPrompt.length}/{MAX_MATERIAL_CHARS}</span>
       </div>
 
+      {/* Per-component materials */}
+      {hasComponents && (
+        <div className="per-component-section">
+          <button
+            className="per-component-toggle"
+            onClick={() => setPerComponentOpen(v => !v)}
+            disabled={disabled}
+            type="button"
+          >
+            <span className="prompt-section-label">Per-component materials</span>
+            <span className="per-component-chevron">{perComponentOpen ? '▲' : '▼'}</span>
+          </button>
+
+          {perComponentOpen && (
+            <div className="per-component-list">
+              {componentNames.map(name => (
+                <div key={name} className="per-component-row">
+                  <span className="per-component-name">{name}</span>
+                  <input
+                    className="per-component-input"
+                    type="text"
+                    maxLength={MAX_PER_COMPONENT_CHARS}
+                    placeholder="e.g. brushed steel"
+                    value={options.componentMaterials[name] ?? ''}
+                    onChange={(e) => setComponentMaterial(name, e.target.value)}
+                    disabled={disabled}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Style prompt */}
       <div className="prompt-section">
         <span className="prompt-section-label">Style notes</span>
@@ -108,7 +157,7 @@ export function StylePanel({
             disabled={disabled}
           />
           <span className="slider-value">{explodeScalar.toFixed(1)}×</span>
-          <InfoIcon text="Capped at 4× for fal.ai — higher values cause components to exit the visible frame during Kling video interpolation, producing broken animation." />
+          <InfoIcon text="Auto-zoom adjusts camera distance to keep all components in frame at any scalar value." />
         </div>
       </div>
 

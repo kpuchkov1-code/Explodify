@@ -89,10 +89,10 @@ _DEFAULT_MATERIAL = (
 # Constraints — what NOT to add
 # ---------------------------------------------------------------------------
 
+# Pruned to the 5 most impactful terms; redundant geometry and cosmetic
+# artifact entries are covered by the geometry lock above.
 _CONSTRAINTS = (
-    "No bloom, glow, lens flare, grain, vignette, motion blur, bokeh, haze, "
-    "smoke, dust, text, watermarks. "
-    "No added, removed, or merged geometry. "
+    "No bloom, glow, lens flare, motion blur, or bokeh. "
     "Stable exposure and material properties across all frames — no flicker."
 )
 
@@ -118,6 +118,7 @@ def build_fal_prompt(
     backdrop: str = "dark",
     ground_shadow: bool = True,
     component_names: list[str] | None = None,
+    component_materials: dict[str, str] | None = None,
 ) -> str:
     """Build a concise, geometry-preserving Kling o1 edit prompt.
 
@@ -130,7 +131,13 @@ def build_fal_prompt(
     sections.append(_GEOMETRY_LOCK_OPEN)
 
     # 2. Surface materials
-    sections.append(_build_material_section(material_prompt, component_names or []))
+    sections.append(
+        _build_material_section(
+            material_prompt,
+            component_names or [],
+            component_materials,
+        )
+    )
 
     # 3. Lighting
     lighting_key = lighting if lighting in _LIGHTING_PRESETS else "studio"
@@ -160,20 +167,33 @@ def build_fal_prompt(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _build_material_section(material_prompt: str, component_names: list[str]) -> str:
-    if not material_prompt.strip():
-        return _DEFAULT_MATERIAL
+def _build_material_section(
+    material_prompt: str,
+    component_names: list[str],
+    component_materials: dict[str, str] | None = None,
+) -> str:
+    materials = component_materials or {}
 
-    parts: list[str] = []
+    # Per-component materials take priority over the global prompt.
+    per_component_entries = [
+        f"{name}: {mat.strip()}."
+        for name, mat in list(materials.items())[:8]
+        if mat.strip()
+    ]
+    if per_component_entries:
+        return " ".join(per_component_entries) + " Apply with correct PBR roughness and Fresnel reflections."
 
-    if component_names:
-        names = ", ".join(component_names[:8])
-        parts.append(f"Parts: {names}.")
+    # Fall back to global material prompt.
+    if material_prompt.strip():
+        parts: list[str] = []
+        if component_names:
+            names = ", ".join(component_names[:8])
+            parts.append(f"Parts: {names}.")
+        parts.append(f"Materials: {material_prompt.strip()}.")
+        parts.append("Apply with correct PBR roughness and Fresnel reflections.")
+        return " ".join(parts)
 
-    parts.append(f"Materials: {material_prompt.strip()}.")
-    parts.append("Apply with correct PBR roughness and Fresnel reflections.")
-
-    return " ".join(parts)
+    return _DEFAULT_MATERIAL
 
 
 def resolve_lighting_key(

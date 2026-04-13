@@ -4,7 +4,6 @@ import type { DragEvent, ChangeEvent } from 'react'
 
 interface Props {
   onUpload: (file: File) => void
-  onLoadSample: () => void
   loading?: boolean
 }
 
@@ -15,7 +14,7 @@ const FORMATS = [
   { ext: '.step', note: 'STP' },
 ] as const
 
-export function UploadZone({ onUpload, onLoadSample, loading }: Props) {
+export function UploadZone({ onUpload, loading }: Props) {
   const [dragging, setDragging] = useState(false)
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
@@ -86,16 +85,6 @@ export function UploadZone({ onUpload, onLoadSample, loading }: Props) {
           </span>
         ))}
       </div>
-
-      <div className="upload-divider"><span>or</span></div>
-
-      <button
-        className="sample-btn"
-        onClick={onLoadSample}
-        disabled={loading}
-      >
-        Load sample assembly
-      </button>
     </div>
   )
 }
