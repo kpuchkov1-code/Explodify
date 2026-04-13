@@ -27,7 +27,7 @@ FAL_KLING_EDIT = "fal-ai/kling-video/o1/video-to-video/edit"
 class KlingVideoEditor:
     """Phase 4: Upload assembled video → Kling o1 edit → download styled result."""
 
-    def __init__(self, fal_key: str | None = None, quality: bool = False) -> None:
+    def __init__(self, fal_key: str | None = None) -> None:
         key = fal_key or os.environ.get("FAL_KEY", "")
         if not key:
             raise ValueError(

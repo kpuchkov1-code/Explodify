@@ -7,14 +7,9 @@ import numpy as np
 import trimesh
 from PIL import Image
 
-from pipeline.models import FrameSet, NamedMesh, PipelineMetadata
+from pipeline.models import NamedMesh
 
-# Default orbit range: 10° per step is safe for FAL/Kling interpolation.
-# Maximum safe total orbit is 60° (15° per step × 4 steps).
 DEFAULT_ORBIT_RANGE_DEG = 40.0
-EXPLOSION_FRACTIONS = [0.0, 0.25, 0.5, 0.75, 1.0]
-FRAME_NAMES = ["frame_a", "frame_b", "frame_c", "frame_d", "frame_e"]
-RESOLUTION = (1024, 768)
 
 
 def _smoothstep(t: float) -> float:
@@ -85,60 +80,6 @@ class SnapshotRenderer:
                 print(f"[Phase 3 render] {i + 1}/{num_frames} frames")
 
         return output_dir
-
-    def render(
-        self,
-        named_meshes: List[NamedMesh],
-        explosion_vectors: dict,
-        master_angle: str,
-        output_dir: Path,
-        scalar: float,
-        source_format: str = "",
-        orbit_range_deg: float = DEFAULT_ORBIT_RANGE_DEG,
-        rotation_offset_deg: float = 0.0,
-        camera_zoom: float = 1.0,
-    ) -> FrameSet:
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        meshes = [nm.mesh for nm in named_meshes]
-        cam_dir = _pick_camera_direction(meshes, master_angle)
-
-        # Distribute orbit evenly across frames: [0, r/4, r/2, 3r/4, r]
-        n = len(FRAME_NAMES)
-        camera_angles = [orbit_range_deg * _smoothstep(i / (n - 1)) for i in range(n)]
-
-        eased_fractions = [_smoothstep(f) for f in EXPLOSION_FRACTIONS]
-        frame_paths = []
-        for fraction, orbit_deg, name in zip(
-            eased_fractions, camera_angles, FRAME_NAMES
-        ):
-            exploded = self._apply_explosion(meshes, explosion_vectors, fraction)
-            img = self._render_scene(
-                exploded, cam_dir, orbit_deg,
-                up_rotation_deg=rotation_offset_deg,
-                camera_zoom=camera_zoom,
-            )
-            out_path = output_dir / f"{name}.png"
-            img.save(str(out_path))
-            frame_paths.append(out_path)
-
-        metadata = PipelineMetadata(
-            master_angle=master_angle,
-            explosion_scalar=scalar,
-            component_count=len(named_meshes),
-            camera_angles_deg=camera_angles,
-            source_format=source_format,
-            component_names=[nm.name for nm in named_meshes],
-        )
-        return FrameSet(
-            frame_a=frame_paths[0],
-            frame_b=frame_paths[1],
-            frame_c=frame_paths[2],
-            frame_d=frame_paths[3],
-            frame_e=frame_paths[4],
-            metadata=metadata,
-        )
 
     def _apply_explosion(
         self,
@@ -226,7 +167,7 @@ class SnapshotRenderer:
         cam_pos = center + orbited * cam_dist
         cam_pose = _look_at(cam_pos, center)
 
-        res = resolution if resolution is not None else RESOLUTION
+        res = resolution if resolution is not None else (1024, 768)
         cam = pyrender.PerspectiveCamera(
             yfov=np.pi / 4.0,
             aspectRatio=res[0] / res[1],
@@ -269,31 +210,6 @@ def render_preview_frame(
     return renderer._render_scene(
         meshes, cam_dir, orbit_deg=0.0, up_rotation_deg=0.0, resolution=resolution
     )
-
-
-def _compute_up_vector(cam_dir: np.ndarray, rotation_deg: float) -> np.ndarray:
-    """Compute camera up vector rotated around the viewing direction axis.
-
-    A rotation_deg of 0 gives the natural world-up orientation.
-    90 rotates the camera frame 90 degrees clockwise from the viewer's perspective.
-    """
-    axis = cam_dir / np.linalg.norm(cam_dir)
-    world_up = np.array([0.0, 1.0, 0.0])
-    if abs(np.dot(axis, world_up)) > 0.99:
-        world_up = np.array([1.0, 0.0, 0.0])
-    angle = math.radians(rotation_deg)
-    cos_a = math.cos(angle)
-    sin_a = math.sin(angle)
-    # Rodrigues rotation formula: rotate world_up around axis
-    rotated = (
-        world_up * cos_a
-        + np.cross(axis, world_up) * sin_a
-        + axis * np.dot(axis, world_up) * (1.0 - cos_a)
-    )
-    norm = np.linalg.norm(rotated)
-    if norm < 1e-8:
-        return world_up
-    return rotated / norm
 
 
 def _pick_camera_direction(meshes: List[trimesh.Trimesh], master_angle: str) -> np.ndarray:

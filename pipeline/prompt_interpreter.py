@@ -17,8 +17,6 @@ scene descriptions.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 
 # ---------------------------------------------------------------------------
 # Geometry lock
@@ -100,16 +98,6 @@ _CONSTRAINTS = (
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class PromptConfig:
-    material_prompt: str = ""
-    style_notes: str = ""
-    lighting: str = "studio"
-    backdrop: str = "dark"
-    ground_shadow: bool = True
-    component_names: list[str] = field(default_factory=list)
-
 
 def build_fal_prompt(
     material_prompt: str = "",

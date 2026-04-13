@@ -64,9 +64,11 @@ def test_preview_returns_six_images():
         face: f"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         for face in ("front", "back", "left", "right", "top", "bottom")
     }
+    mock_meshes = [MagicMock(name="part_0")]
 
     with patch("pipeline.orientation_preview.render_orientation_previews", return_value=dummy_images), \
-         patch("pipeline.format_loader.load_assembly", return_value=[]):
+         patch("pipeline.format_loader.load_assembly", return_value=mock_meshes), \
+         patch("pipeline.phase1_geometry.GeometryAnalyzer.reorient", return_value=mock_meshes):
         with open(FIXTURE_GLB, "rb") as f:
             resp = client.post(
                 "/preview",
@@ -76,6 +78,7 @@ def test_preview_returns_six_images():
     body = resp.json()
     assert "preview_id" in body
     assert "images" in body
+    assert "component_names" in body
     for face in ("front", "back", "left", "right", "top", "bottom"):
         assert face in body["images"]
         assert body["images"][face].startswith("data:image/png;base64,")
@@ -90,9 +93,11 @@ def test_create_job_with_preview_id():
         face: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         for face in ("front", "back", "left", "right", "top", "bottom")
     }
+    mock_meshes = [MagicMock(name="part_0")]
 
     with patch("pipeline.orientation_preview.render_orientation_previews", return_value=dummy_images), \
-         patch("pipeline.format_loader.load_assembly", return_value=[]):
+         patch("pipeline.format_loader.load_assembly", return_value=mock_meshes), \
+         patch("pipeline.phase1_geometry.GeometryAnalyzer.reorient", return_value=mock_meshes):
         with open(FIXTURE_GLB, "rb") as f:
             preview_resp = client.post(
                 "/preview",
