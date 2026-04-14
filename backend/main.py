@@ -246,6 +246,92 @@ def get_video(job_id: str):
     return get_video_variant(job_id, "longest")
 
 
+@app.post("/jobs/{job_id}/restyle", status_code=202)
+async def restyle_job(
+    job_id: str,
+    component_rows: str = Form("[]"),
+    style_prompt: str = Form(""),
+    selected_variants: str = Form("longest,shortest"),
+):
+    source_job = jobs.get_job(job_id)
+    if source_job is None:
+        raise HTTPException(status_code=404, detail="Source job not found")
+
+    source_dir = UPLOAD_DIR / job_id
+    variants = [v.strip() for v in selected_variants.split(",") if v.strip() in VARIANT_NAMES]
+    if not variants:
+        variants = list(VARIANT_NAMES)
+
+    available = [v for v in variants if (source_dir / f"base_video_{v}.mp4").exists()]
+    if not available:
+        raise HTTPException(status_code=425, detail="Base video not ready — cannot restyle")
+
+    import json as _json
+    try:
+        parsed_rows: list[dict] = _json.loads(component_rows)
+        if not isinstance(parsed_rows, list):
+            parsed_rows = []
+    except Exception:
+        parsed_rows = []
+
+    new_job_id = jobs.create_job()
+    new_dir = UPLOAD_DIR / new_job_id
+    new_dir.mkdir(parents=True, exist_ok=True)
+
+    import shutil as _shutil
+    for v in available:
+        _shutil.copy2(source_dir / f"base_video_{v}.mp4", new_dir / f"base_video_{v}.mp4")
+
+    asyncio.create_task(
+        _run_phase4_only(new_job_id, parsed_rows, style_prompt, available)
+    )
+
+    return {"job_id": new_job_id}
+
+
+async def _run_phase4_only(
+    job_id: str,
+    rows: list[dict],
+    style_prompt: str,
+    variants: list[str],
+) -> None:
+    output_dir = UPLOAD_DIR / job_id
+    try:
+        fal_key = os.environ.get("FAL_KEY", "")
+        if not fal_key:
+            import logging
+            logging.warning("FAL_KEY not set; skipping restyle phase 4")
+            jobs.update_phase(job_id, 4, "done")
+            jobs.mark_done(job_id, ai_styled=False)
+            return
+
+        jobs.update_phase(job_id, 4, "running")
+        from pipeline.prompt_interpreter import build_fal_prompt
+        from pipeline.phase4_video import KlingVideoEditor
+
+        fal_prompt = build_fal_prompt(rows=rows, style_prompt=style_prompt)
+        editor = KlingVideoEditor(fal_key=fal_key)
+
+        style_tasks = [
+            editor.edit(
+                output_dir / f"base_video_{v}.mp4",
+                fal_prompt,
+                output_dir / f"final_video_{v}.mp4",
+            )
+            for v in variants
+            if (output_dir / f"base_video_{v}.mp4").exists()
+        ]
+
+        if style_tasks:
+            await asyncio.gather(*style_tasks)
+
+        jobs.update_phase(job_id, 4, "done")
+        jobs.mark_done(job_id, ai_styled=len(style_tasks) > 0)
+
+    except Exception as exc:
+        jobs.mark_error(job_id, 4, str(exc))
+
+
 async def _run_pipeline(
     job_id: str,
     cad_path: Path,

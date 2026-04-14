@@ -6,7 +6,7 @@ import { StylePanel } from './components/StylePanel'
 import { IdleOutput } from './components/IdleOutput'
 import { LoadingOutput } from './components/LoadingOutput'
 import { VideoOutput } from './components/VideoOutput'
-import { getPreviewImages, createJob, getJobStatus, approvePhase4 } from './api/client'
+import { getPreviewImages, createJob, getJobStatus, approvePhase4, restyleJob } from './api/client'
 import type { JobStatus, FaceName, PreviewResult, VariantName } from './api/client'
 
 type AppState = 'idle' | 'uploading' | 'orientation' | 'processing' | 'awaiting_approval' | 'styling' | 'done' | 'error'
@@ -19,6 +19,13 @@ export interface Row {
 export interface StyleOptions {
   rows: Row[]
   prompt: string
+}
+
+export interface RestyleEntry {
+  jobId: string
+  status: 'generating' | 'done' | 'error'
+  variants: VariantName[]
+  aiStyled: boolean
 }
 
 const DEFAULT_STYLE: StyleOptions = {
@@ -45,7 +52,10 @@ export default function App() {
   const [selectedVariants, setSelectedVariants] = useState<Set<VariantName>>(new Set(['longest', 'shortest']))
   const [approvalSelected, setApprovalSelected] = useState<Set<VariantName>>(new Set(['longest', 'shortest']))
   const [renderedSettings, setRenderedSettings] = useState<{ explodeScalar: number; orbitRangeDeg: number; cameraZoom: number } | null>(null)
+  const [restyleStack, setRestyleStack] = useState<RestyleEntry[]>([])
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const restyleStackRef = useRef<RestyleEntry[]>(restyleStack)
+  restyleStackRef.current = restyleStack
 
   const settingsChanged = renderedSettings !== null && (
     renderedSettings.explodeScalar !== explodeScalar ||
@@ -126,6 +136,48 @@ export default function App() {
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [state, jobId])
 
+  async function handleRestyle(opts: StyleOptions, variants: VariantName[]) {
+    if (!jobId) return
+    try {
+      const newJobId = await restyleJob(jobId, {
+        rows: opts.rows,
+        stylePrompt: opts.prompt,
+        selectedVariants: variants,
+      })
+      setRestyleStack(prev => [
+        { jobId: newJobId, status: 'generating', variants, aiStyled: false },
+        ...prev,
+      ])
+    } catch {
+      // silently fail — the skeleton will not appear
+    }
+  }
+
+  const hasGeneratingRestyle = restyleStack.some(e => e.status === 'generating')
+  useEffect(() => {
+    if (!hasGeneratingRestyle) return
+    const interval = setInterval(async () => {
+      const generating = restyleStackRef.current.filter(e => e.status === 'generating')
+      if (generating.length === 0) return
+      const results = await Promise.allSettled(
+        generating.map(e => getJobStatus(e.jobId).then(s => ({ jobId: e.jobId, s })))
+      )
+      setRestyleStack(prev =>
+        prev.map(entry => {
+          const found = results
+            .filter((r): r is PromiseFulfilledResult<{ jobId: string; s: JobStatus }> => r.status === 'fulfilled')
+            .find(r => r.value.jobId === entry.jobId)
+          if (!found) return entry
+          const { s } = found.value
+          if (s.status === 'done') return { ...entry, status: 'done' as const, aiStyled: s.ai_styled }
+          if (s.status === 'error') return { ...entry, status: 'error' as const }
+          return entry
+        })
+      )
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [hasGeneratingRestyle])
+
   async function handleApprove(variants: VariantName[]) {
     if (!jobId) return
     try {
@@ -156,6 +208,7 @@ export default function App() {
     setApprovalSelected(new Set(['longest', 'shortest']))
     setRenderedSettings(null)
     setErrorMsg(null)
+    setRestyleStack([])
   }
 
   const showControls = state === 'orientation' || state === 'processing' || state === 'awaiting_approval' || state === 'styling' || state === 'done'
@@ -323,6 +376,9 @@ export default function App() {
             jobId={jobId}
             aiStyled={jobStatus?.ai_styled ?? false}
             selectedVariants={[...selectedVariants]}
+            styleOptions={styleOptions}
+            restyleStack={restyleStack}
+            onRestyle={handleRestyle}
           />
         )}
 

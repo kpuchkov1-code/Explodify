@@ -80,6 +80,27 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
   return resp.json()
 }
 
+export async function restyleJob(
+  sourceJobId: string,
+  options: {
+    rows: Row[]
+    stylePrompt: string
+    selectedVariants: VariantName[]
+  },
+): Promise<string> {
+  const form = new FormData()
+  form.append('component_rows', JSON.stringify(options.rows))
+  form.append('style_prompt', options.stylePrompt)
+  form.append('selected_variants', options.selectedVariants.join(','))
+  const resp = await fetch(`/jobs/${sourceJobId}/restyle`, { method: 'POST', body: form })
+  if (!resp.ok) {
+    const detail = await resp.json().catch(() => ({ detail: resp.statusText }))
+    throw new Error(detail.detail ?? resp.statusText)
+  }
+  const data = await resp.json()
+  return data.job_id as string
+}
+
 export async function approvePhase4(
   jobId: string,
   selectedVariants: VariantName[],

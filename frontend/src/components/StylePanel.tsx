@@ -50,10 +50,10 @@ function removePhrase(current: string, phrase: string): string {
 interface Props {
   options: StyleOptions
   onOptionsChange: (opts: StyleOptions) => void
-  explodeScalar: number
-  onExplodeChange: (v: number) => void
-  orbitRangeDeg: number
-  onOrbitRangeChange: (v: number) => void
+  explodeScalar?: number
+  onExplodeChange?: (v: number) => void
+  orbitRangeDeg?: number
+  onOrbitRangeChange?: (v: number) => void
   disabled?: boolean
 }
 
@@ -219,39 +219,43 @@ export function StylePanel({
         </div>
       </div>
 
-      {/* Explosion level */}
-      <div className="slider-row">
-        <div className="slider-header">
-          <span className="slider-label">Explosion Level</span>
+      {/* Explosion level — hidden in compact/restyle mode */}
+      {explodeScalar !== undefined && onExplodeChange && (
+        <div className="slider-row">
+          <div className="slider-header">
+            <span className="slider-label">Explosion Level</span>
+          </div>
+          <div className="slider-value-row">
+            <input
+              type="range" min={0.5} max={4.0} step={0.1}
+              value={explodeScalar}
+              onChange={e => onExplodeChange(parseFloat(e.target.value))}
+              disabled={disabled}
+            />
+            <span className="slider-value">{explodeScalar.toFixed(1)}×</span>
+            <InfoIcon text="Auto-zoom adjusts camera distance to keep all components in frame." />
+          </div>
         </div>
-        <div className="slider-value-row">
-          <input
-            type="range" min={0.5} max={4.0} step={0.1}
-            value={explodeScalar}
-            onChange={e => onExplodeChange(parseFloat(e.target.value))}
-            disabled={disabled}
-          />
-          <span className="slider-value">{explodeScalar.toFixed(1)}×</span>
-          <InfoIcon text="Auto-zoom adjusts camera distance to keep all components in frame." />
-        </div>
-      </div>
+      )}
 
-      {/* Camera orbit */}
-      <div className="slider-row">
-        <div className="slider-header">
-          <span className="slider-label">Camera Orbit</span>
+      {/* Camera orbit — hidden in compact/restyle mode */}
+      {orbitRangeDeg !== undefined && onOrbitRangeChange && (
+        <div className="slider-row">
+          <div className="slider-header">
+            <span className="slider-label">Camera Orbit</span>
+          </div>
+          <div className="slider-value-row">
+            <input
+              type="range" min={0} max={60} step={5}
+              value={orbitRangeDeg}
+              onChange={e => onOrbitRangeChange(parseInt(e.target.value))}
+              disabled={disabled}
+            />
+            <span className="slider-value">{orbitRangeDeg}°</span>
+            <InfoIcon text="Total camera orbit range during rendering." />
+          </div>
         </div>
-        <div className="slider-value-row">
-          <input
-            type="range" min={0} max={60} step={5}
-            value={orbitRangeDeg}
-            onChange={e => onOrbitRangeChange(parseInt(e.target.value))}
-            disabled={disabled}
-          />
-          <span className="slider-value">{orbitRangeDeg}°</span>
-          <InfoIcon text="Total camera orbit range during rendering." />
-        </div>
-      </div>
+      )}
 
     </div>
   )

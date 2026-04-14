@@ -50,7 +50,7 @@ _RENDER_STYLE = (
     "Render quality: professional product visualisation, Blender Cycles standard. "
     "Background: pure infinite void — solid colour or smooth gradient only, "
     "no physical backdrop, no environment geometry, no edges or seams visible at any zoom level. "
-    "Lighting: clean area lights with soft shadow falloff. "
+    "Lighting: clean area lights with soft shadow falloff, no ground shadow, no floor reflection. "
     "No lens flare, no bloom, no glow, no chromatic aberration, no post-processing artifacts."
 )
 

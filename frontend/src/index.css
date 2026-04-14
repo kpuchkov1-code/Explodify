@@ -2389,12 +2389,314 @@ input[type='range']::-moz-range-thumb {
   border-bottom: 1px solid var(--border);
 }
 
+.video-variant-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .video-variant-label {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.12em;
   color: var(--text-2);
   font-weight: 600;
+}
+
+/* ─── Generation stack ─── */
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: -800px 0; }
+  100% { background-position: 800px 0; }
+}
+
+/* Card shared base */
+.video-stack-card {
+  border-left: 2px solid var(--accent);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Original card when restyles exist — dimmed left border */
+.video-stack-card--original {
+  border-left-color: var(--border-active);
+}
+
+/* No restyles yet — original takes full hero treatment, no left bar */
+.video-stack-card--solo {
+  border-left: none;
+  background: #040404;
+}
+
+.video-stack-card--solo .video-hero-header {
+  padding: 28px 24px 0;
+}
+
+.video-stack-card--generating {
+  border-left-color: rgba(212, 168, 67, 0.5);
+}
+
+.video-stack-card--error {
+  border-left-color: var(--error);
+}
+
+.video-stack-card--done {
+  border-left-color: var(--accent);
+}
+
+/* Stack card header row */
+.stack-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px 0;
+  margin-bottom: 12px;
+}
+
+.stack-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Generation number badge */
+.stack-gen-badge {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+  border: 1px solid rgba(212, 168, 67, 0.35);
+  padding: 3px 8px;
+  border-radius: 2px;
+  text-transform: uppercase;
+}
+
+/* "GENERATING" label with pulsing dot */
+.stack-gen-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+
+.stack-gen-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: pulse-dot 1.1s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(0.7); }
+}
+
+/* Re-styled badge */
+.stack-done-badge {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  color: var(--success);
+  text-transform: uppercase;
+}
+
+/* Original badge when stack exists */
+.stack-original-badge {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+
+/* Failed badge */
+.stack-error-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  color: var(--error);
+  text-transform: uppercase;
+}
+
+/* Skeleton stage — same dims as the video player */
+.video-skeleton-stage {
+  padding: 0;
+}
+
+.video-skeleton {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: block;
+  background: linear-gradient(
+    90deg,
+    #0a0a0a 0%,
+    #0a0a0a 20%,
+    rgba(212, 168, 67, 0.05) 38%,
+    rgba(212, 168, 67, 0.11) 50%,
+    rgba(212, 168, 67, 0.05) 62%,
+    #0a0a0a 80%,
+    #0a0a0a 100%
+  );
+  background-size: 1600px 100%;
+  animation: skeleton-shimmer 2.2s ease-in-out infinite;
+}
+
+/* ─── Re-style controls ─── */
+
+.restyle-controls {
+  padding: 20px 24px;
+  background: #040404;
+  border-bottom: 1px solid var(--border);
+}
+
+.restyle-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid rgba(212, 168, 67, 0.35);
+  padding: 9px 20px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.restyle-toggle-btn:hover:not(:disabled) {
+  background: var(--accent-dim);
+  border-color: rgba(212, 168, 67, 0.6);
+}
+
+.restyle-toggle-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.restyle-toggle-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* Drawer */
+.restyle-drawer {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.restyle-drawer-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Variant toggles inside drawer */
+.restyle-variant-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.restyle-variant-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.restyle-variant-toggles {
+  display: flex;
+  gap: 6px;
+}
+
+.restyle-variant-btn {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+
+.restyle-variant-btn--active {
+  color: var(--accent);
+  border-color: rgba(212, 168, 67, 0.5);
+  background: var(--accent-dim);
+}
+
+.restyle-variant-btn:hover:not(.restyle-variant-btn--active) {
+  color: var(--text-1);
+  border-color: var(--border-active);
+}
+
+/* Footer buttons */
+.restyle-drawer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+}
+
+.restyle-cancel-btn {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.restyle-cancel-btn:hover {
+  color: var(--text-1);
+  border-color: var(--border-active);
+}
+
+.restyle-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #000;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 9px 20px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.restyle-submit-btn:hover {
+  opacity: 0.88;
+}
+
+.restyle-submit-arrow {
+  font-size: 13px;
+  line-height: 1;
 }
 
 /* ─── Settings changed indicator ─── */
