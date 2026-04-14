@@ -11,28 +11,23 @@ import type { JobStatus, FaceName, PreviewResult, VariantName } from './api/clie
 
 type AppState = 'idle' | 'uploading' | 'orientation' | 'processing' | 'awaiting_approval' | 'styling' | 'done' | 'error'
 
+export interface Row {
+  part: string
+  material: string
+}
+
 export interface StyleOptions {
-  studioLighting: boolean
-  darkBackdrop: boolean
-  whiteBackdrop: boolean
-  warmTone: boolean
-  coldTone: boolean
-  groundShadow: boolean
-  materialPrompt: string
+  rows: Row[]
   prompt: string
-  componentMaterials: Record<string, string>
 }
 
 const DEFAULT_STYLE: StyleOptions = {
-  studioLighting: true,
-  darkBackdrop: false,
-  whiteBackdrop: false,
-  warmTone: false,
-  coldTone: false,
-  groundShadow: true,
-  materialPrompt: '',
+  rows: [
+    { part: '', material: '' },
+    { part: '', material: '' },
+    { part: '', material: '' },
+  ],
   prompt: '',
-  componentMaterials: {},
 }
 
 export default function App() {
@@ -46,7 +41,6 @@ export default function App() {
   const [explodeScalar, setExplodeScalar] = useState(1.5)
   const [cameraZoom, setCameraZoom] = useState(1.0)
   const [styleOptions, setStyleOptions] = useState<StyleOptions>(DEFAULT_STYLE)
-  const [componentNames, setComponentNames] = useState<string[]>([])
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [selectedVariants, setSelectedVariants] = useState<Set<VariantName>>(new Set(['longest', 'shortest']))
   const [approvalSelected, setApprovalSelected] = useState<Set<VariantName>>(new Set(['longest', 'shortest']))
@@ -66,7 +60,13 @@ export default function App() {
       const result = await getPreviewImages(file)
       setPreview(result)
       setSelectedFace('front')
-      setComponentNames(result.component_names ?? [])
+      const names = result.component_names ?? []
+      if (names.length > 0) {
+        setStyleOptions(prev => ({
+          ...prev,
+          rows: names.slice(0, 20).map(name => ({ part: name, material: '' })),
+        }))
+      }
       setState('orientation')
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Preview failed')
@@ -82,20 +82,13 @@ export default function App() {
       const id = await createJob({
         previewId: preview.preview_id,
         explodeScalar,
-        materialPrompt: styleOptions.materialPrompt,
+        rows: styleOptions.rows,
         stylePrompt: styleOptions.prompt,
-        studioLighting: styleOptions.studioLighting,
-        darkBackdrop: styleOptions.darkBackdrop,
-        whiteBackdrop: styleOptions.whiteBackdrop,
-        warmTone: styleOptions.warmTone,
-        coldTone: styleOptions.coldTone,
-        groundShadow: styleOptions.groundShadow,
         masterAngle: selectedFace,
         rotationOffsetDeg: rotationDeg,
         orbitRangeDeg,
         cameraZoom,
         variantsToRender,
-        componentMaterials: styleOptions.componentMaterials,
       })
       setJobId(id)
       setJobStatus(null)
@@ -137,14 +130,8 @@ export default function App() {
     if (!jobId) return
     try {
       await approvePhase4(jobId, variants, {
-        materialPrompt: styleOptions.materialPrompt,
+        rows: styleOptions.rows,
         stylePrompt: styleOptions.prompt,
-        studioLighting: styleOptions.studioLighting,
-        darkBackdrop: styleOptions.darkBackdrop,
-        whiteBackdrop: styleOptions.whiteBackdrop,
-        warmTone: styleOptions.warmTone,
-        coldTone: styleOptions.coldTone,
-        groundShadow: styleOptions.groundShadow,
       })
       setSelectedVariants(new Set(variants))
       setState('styling')
@@ -165,7 +152,6 @@ export default function App() {
     setExplodeScalar(1.5)
     setCameraZoom(1.0)
     setStyleOptions(DEFAULT_STYLE)
-    setComponentNames([])
     setSelectedVariants(new Set(['longest', 'shortest']))
     setApprovalSelected(new Set(['longest', 'shortest']))
     setRenderedSettings(null)
@@ -214,7 +200,6 @@ export default function App() {
                   onExplodeChange={setExplodeScalar}
                   orbitRangeDeg={orbitRangeDeg}
                   onOrbitRangeChange={setOrbitRangeDeg}
-                  componentNames={componentNames}
                   disabled={controlsDisabled}
                 />
               </section>

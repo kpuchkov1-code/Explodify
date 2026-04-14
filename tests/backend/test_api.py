@@ -111,6 +111,7 @@ def test_create_job_with_preview_id():
         data={
             "preview_id": preview_id,
             "explode_scalar": "1.5",
+            "component_rows": "[]",
             "style_prompt": "",
             "master_angle": "front",
             "rotation_offset_deg": "0.0",

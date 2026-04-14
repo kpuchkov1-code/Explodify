@@ -156,7 +156,7 @@ def _scene_to_named_meshes(scene) -> List[NamedMesh]:
     if isinstance(scene, trimesh.Trimesh):
         if len(scene.faces) == 0:
             raise ValueError("Loaded file contains no geometry.")
-        return [NamedMesh(name="mesh_0", mesh=scene)]
+        return [NamedMesh(name="Part 1", mesh=scene)]
 
     if not isinstance(scene, trimesh.Scene):
         raise ValueError(f"Unexpected trimesh result type: {type(scene)}")
@@ -174,4 +174,28 @@ def _scene_to_named_meshes(scene) -> List[NamedMesh]:
             "(not just sketch geometry or empty components)."
         )
 
-    return meshes
+    return _sanitize_names(meshes)
+
+
+import re as _re
+
+_AUTO_NAME_PATTERN = _re.compile(
+    r'^(color_|group_\d+_|mesh_\d*|obj_\d+)[-\d]*$',
+    _re.IGNORECASE,
+)
+
+
+def _sanitize_names(meshes: List[NamedMesh]) -> List[NamedMesh]:
+    """Replace auto-generated hash/index names with human-readable Part N labels.
+
+    Trimesh keys OBJ geometry by the usemtl material name, which is often an
+    auto-generated hash (e.g. 'color_-1040146473').  Replace these with
+    'Part 1', 'Part 2', ... so the UI shows something useful.
+    """
+    all_auto = all(_AUTO_NAME_PATTERN.match(m.name) for m in meshes)
+    if not all_auto:
+        return meshes
+    return [
+        NamedMesh(name=f"Part {i + 1}", mesh=m.mesh)
+        for i, m in enumerate(meshes)
+    ]

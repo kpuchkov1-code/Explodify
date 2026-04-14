@@ -70,20 +70,13 @@ async def create_job(
     file: Optional[UploadFile] = File(None),
     preview_id: Optional[str] = Form(None),
     explode_scalar: float = Form(1.5),
-    material_prompt: str = Form(""),
     style_prompt: str = Form(""),
-    studio_lighting: bool = Form(True),
-    dark_backdrop: bool = Form(False),
-    white_backdrop: bool = Form(False),
-    warm_tone: bool = Form(False),
-    cold_tone: bool = Form(False),
-    ground_shadow: bool = Form(True),
+    component_rows: str = Form("[]"),
     master_angle: str = Form("front"),
     rotation_offset_deg: float = Form(0.0),
     orbit_range_deg: float = Form(40.0),
     camera_zoom: float = Form(1.0),
     variants_to_render: str = Form("longest,shortest"),
-    component_materials: str = Form("{}"),
 ):
     if preview_id:
         matches = list(PREVIEW_DIR.glob(f"{preview_id}.*"))
@@ -107,23 +100,17 @@ async def create_job(
 
     import json as _json
     try:
-        parsed_component_materials: dict[str, str] = _json.loads(component_materials)
-        if not isinstance(parsed_component_materials, dict):
-            parsed_component_materials = {}
+        parsed_rows: list[dict] = _json.loads(component_rows)
+        if not isinstance(parsed_rows, list):
+            parsed_rows = []
     except Exception:
-        parsed_component_materials = {}
+        parsed_rows = []
 
     asyncio.create_task(
         _run_pipeline(
             job_id, cad_path, explode_scalar,
-            material_prompt=material_prompt,
+            rows=parsed_rows,
             style_prompt=style_prompt,
-            studio_lighting=studio_lighting,
-            dark_backdrop=dark_backdrop,
-            white_backdrop=white_backdrop,
-            warm_tone=warm_tone,
-            cold_tone=cold_tone,
-            ground_shadow=ground_shadow,
             master_angle=master_angle,
             rotation_offset_deg=rotation_offset_deg,
             orbit_range_deg=orbit_range_deg,
@@ -163,14 +150,8 @@ def get_frame(job_id: str, frame_name: str):
 @app.post("/jobs/{job_id}/approve", status_code=202)
 async def approve_job(
     job_id: str,
-    material_prompt: Optional[str] = Form(None),
+    component_rows: Optional[str] = Form(None),
     style_prompt: Optional[str] = Form(None),
-    studio_lighting: Optional[str] = Form(None),
-    dark_backdrop: Optional[str] = Form(None),
-    white_backdrop: Optional[str] = Form(None),
-    warm_tone: Optional[str] = Form(None),
-    cold_tone: Optional[str] = Form(None),
-    ground_shadow: Optional[str] = Form(None),
     selected_variants: Optional[str] = Form(None),
 ):
     job = jobs.get_job(job_id)
@@ -182,22 +163,18 @@ async def approve_job(
             detail=f"Job is not awaiting approval (status: {job.status})",
         )
 
-    def _to_bool(val: Optional[str], default: bool) -> bool:
-        if val is None:
-            return default
-        return val.lower() in ("true", "1", "yes")
-
+    import json as _json
     style_overrides = None
-    if material_prompt is not None:
+    if component_rows is not None:
+        try:
+            parsed_override_rows: list[dict] = _json.loads(component_rows)
+            if not isinstance(parsed_override_rows, list):
+                parsed_override_rows = []
+        except Exception:
+            parsed_override_rows = []
         style_overrides = {
-            "material_prompt": material_prompt or "",
+            "rows": parsed_override_rows,
             "style_prompt": style_prompt or "",
-            "studio_lighting": _to_bool(studio_lighting, True),
-            "dark_backdrop": _to_bool(dark_backdrop, False),
-            "white_backdrop": _to_bool(white_backdrop, False),
-            "warm_tone": _to_bool(warm_tone, False),
-            "cold_tone": _to_bool(cold_tone, False),
-            "ground_shadow": _to_bool(ground_shadow, True),
         }
 
     variants = None
@@ -274,14 +251,8 @@ async def _run_pipeline(
     job_id: str,
     cad_path: Path,
     scalar: float,
-    material_prompt: str = "",
+    rows: list[dict] | None = None,
     style_prompt: str = "",
-    studio_lighting: bool = True,
-    dark_backdrop: bool = False,
-    white_backdrop: bool = False,
-    warm_tone: bool = False,
-    cold_tone: bool = False,
-    ground_shadow: bool = True,
     master_angle: str = "front",
     rotation_offset_deg: float = 0.0,
     orbit_range_deg: float = 40.0,
@@ -361,14 +332,8 @@ async def _run_pipeline(
 
         overrides = jobs.get_approval_style(job_id)
         if overrides:
-            material_prompt = overrides["material_prompt"]
-            style_prompt = overrides["style_prompt"]
-            studio_lighting = overrides["studio_lighting"]
-            dark_backdrop = overrides["dark_backdrop"]
-            white_backdrop = overrides["white_backdrop"]
-            warm_tone = overrides["warm_tone"]
-            cold_tone = overrides["cold_tone"]
-            ground_shadow = overrides["ground_shadow"]
+            rows = overrides.get("rows") or rows
+            style_prompt = overrides.get("style_prompt", style_prompt)
 
         selected = jobs.get_approval_variants(job_id)
 
@@ -381,20 +346,12 @@ async def _run_pipeline(
             return
 
         jobs.update_phase(job_id, 4, "running")
-        from pipeline.prompt_interpreter import (
-            build_fal_prompt, resolve_backdrop_key, resolve_lighting_key,
-        )
+        from pipeline.prompt_interpreter import build_fal_prompt
         from pipeline.phase4_video import KlingVideoEditor
 
-        component_names = [nm.name for nm in meshes]
         fal_prompt = build_fal_prompt(
-            material_prompt=material_prompt,
+            rows=rows,
             style_prompt=style_prompt,
-            lighting=resolve_lighting_key(studio_lighting, warm_tone, cold_tone),
-            backdrop=resolve_backdrop_key(dark_backdrop, white_backdrop),
-            ground_shadow=ground_shadow,
-            component_names=component_names,
-            component_materials=component_materials,
         )
 
         editor = KlingVideoEditor(fal_key=fal_key)
