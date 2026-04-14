@@ -42,23 +42,23 @@ _DEFAULT_MATERIAL = (
 
 
 # ---------------------------------------------------------------------------
-# Hard visual constraints (injected before style notes so Kling weights them
-# above any user phrasing)
+# Base render style — injected before materials and user notes so Kling
+# anchors to the correct aesthetic reference before reading anything else.
 # ---------------------------------------------------------------------------
 
-_HARD_CONSTRAINTS = (
-    "HARD CONSTRAINTS — override any other instruction: "
-    "absolutely no lens flare of any kind; "
-    "background must be a pure infinite void — solid colour or smooth gradient only, "
-    "no physical studio backdrop, no visible backdrop edges or seams, "
-    "no floor-wall joint, no environment geometry visible at any zoom level."
+_RENDER_STYLE = (
+    "Render quality: professional product visualisation, Blender Cycles standard. "
+    "Background: pure infinite void — solid colour or smooth gradient only, "
+    "no physical backdrop, no environment geometry, no edges or seams visible at any zoom level. "
+    "Lighting: clean area lights with soft shadow falloff. "
+    "No lens flare, no bloom, no glow, no chromatic aberration, no post-processing artifacts."
 )
 
-# Closing constraints appended after style notes
+# Closing constraints — bookend the prompt for reinforcement
 _CONSTRAINTS = (
-    "No bloom, glow, lens flare, motion blur, or bokeh. "
-    "Stable exposure and material properties across all frames — no flicker. "
-    "Infinite void background only — no backdrop edges under any circumstance."
+    "No lens flare, bloom, glow, motion blur, or bokeh of any kind. "
+    "Infinite void background — no backdrop edges under any circumstance. "
+    "Stable, flicker-free exposure and materials across all frames."
 )
 
 
@@ -77,7 +77,7 @@ def build_fal_prompt(
         style_prompt: Free-form style notes (lighting, backdrop, mood).
     """
     sections: list[str] = [_GEOMETRY_LOCK_OPEN]
-    sections.append(_HARD_CONSTRAINTS)
+    sections.append(_RENDER_STYLE)
     sections.append(_build_rows_section(rows or []))
     if style_prompt.strip():
         sections.append(style_prompt.strip())

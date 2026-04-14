@@ -19,12 +19,12 @@ const MATERIAL_PRESETS = [
 ]
 
 const STYLE_TAGS = [
-  { label: 'Studio lighting', phrase: 'hyper realistic ray tracing dramatic studio lighting' },
-  { label: 'Dark backdrop',   phrase: 'infinite near-black void background' },
-  { label: 'White backdrop',  phrase: 'infinite pure-white void background' },
-  { label: 'Warm tone',       phrase: 'warm golden 3800K lighting amber tones' },
-  { label: 'Cold tone',       phrase: 'cool 6500K clinical blue-white lighting' },
-  { label: 'Ground shadow',   phrase: 'soft ground plane shadow' },
+  { label: 'Black void',  phrase: 'pure black infinite void background' },
+  { label: 'Grey void',   phrase: 'neutral mid-grey infinite void background' },
+  { label: 'White void',  phrase: 'pure white infinite void background' },
+  { label: 'Warm light',  phrase: 'warm 3800K three-point area lighting, soft amber fill' },
+  { label: 'Cool light',  phrase: 'cool 6500K neutral area lighting, clinical precision' },
+  { label: 'Rim light',   phrase: 'sharp rim light separating components from background' },
 ]
 
 function countChars(rows: Row[], prompt: string): number {
