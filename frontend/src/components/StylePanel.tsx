@@ -122,17 +122,39 @@ export function StylePanel({
                     disabled={disabled}
                     spellCheck={false}
                   />
-                  <input
-                    className="cmt-input cmt-input--material"
-                    type="text"
-                    placeholder="material..."
-                    value={row.material}
-                    onFocus={() => setFocusedRow(idx)}
-                    onBlur={() => setTimeout(() => setFocusedRow(f => f === idx ? null : f), 120)}
-                    onChange={e => updateRow(idx, 'material', e.target.value)}
-                    disabled={disabled}
-                    spellCheck={false}
-                  />
+                  <div className="cmt-material-cell">
+                    <input
+                      className="cmt-input cmt-input--material"
+                      type="text"
+                      placeholder="material..."
+                      value={row.material}
+                      onFocus={() => setFocusedRow(idx)}
+                      onBlur={() => setTimeout(() => setFocusedRow(f => f === idx ? null : f), 120)}
+                      onChange={e => updateRow(idx, 'material', e.target.value)}
+                      disabled={disabled}
+                      spellCheck={false}
+                    />
+                    {focusedRow === idx && (
+                      <div
+                        className="cmt-presets"
+                        onMouseDown={e => e.preventDefault()}
+                      >
+                        {MATERIAL_PRESETS.map(preset => (
+                          <button
+                            key={preset}
+                            className={['cmt-preset', row.material === preset ? 'cmt-preset--active' : ''].filter(Boolean).join(' ')}
+                            type="button"
+                            onMouseDown={e => {
+                              e.preventDefault()
+                              setMaterialPreset(idx, preset)
+                            }}
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <button
                     className="cmt-row-remove"
                     type="button"
@@ -143,27 +165,6 @@ export function StylePanel({
                     ×
                   </button>
                 </div>
-
-                {focusedRow === idx && (
-                  <div
-                    className="cmt-presets"
-                    onMouseDown={e => e.preventDefault()}
-                  >
-                    {MATERIAL_PRESETS.map(preset => (
-                      <button
-                        key={preset}
-                        className={['cmt-preset', row.material === preset ? 'cmt-preset--active' : ''].filter(Boolean).join(' ')}
-                        type="button"
-                        onMouseDown={e => {
-                          e.preventDefault()
-                          setMaterialPreset(idx, preset)
-                        }}
-                      >
-                        {preset}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
           </div>

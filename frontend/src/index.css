@@ -567,15 +567,11 @@ textarea { font-family: inherit; }
 }
 
 .cmt-body {
-  max-height: 240px;
-  overflow-y: auto;
+  overflow: visible;
 }
 
-.cmt-body::-webkit-scrollbar { width: 2px; }
-.cmt-body::-webkit-scrollbar-track { background: transparent; }
-.cmt-body::-webkit-scrollbar-thumb { background: var(--border-active); }
-
 .cmt-row-wrap {
+  position: relative;
   border-bottom: 1px solid var(--border);
 }
 
@@ -623,6 +619,13 @@ textarea { font-family: inherit; }
   border-right: 1px solid var(--border);
 }
 
+.cmt-material-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .cmt-row-remove {
   display: flex;
   align-items: center;
@@ -647,39 +650,53 @@ textarea { font-family: inherit; }
   cursor: not-allowed;
 }
 
-/* Material preset tag strip — shown below focused row */
+/* Material preset dropdown — aligned to material column */
 .cmt-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 6px 8px 7px;
-  border-top: 1px dashed var(--border);
-  background: rgba(0,0,0,0.15);
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  z-index: 200;
+  background: #141414;
+  border: 1px solid var(--border-active);
+  border-top: none;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.65);
+  max-height: 160px;
+  overflow-y: auto;
 }
 
+.cmt-presets::-webkit-scrollbar { width: 2px; }
+.cmt-presets::-webkit-scrollbar-track { background: transparent; }
+.cmt-presets::-webkit-scrollbar-thumb { background: var(--border-active); }
+
 .cmt-preset {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 7px;
-  border: 1px solid var(--border);
-  border-radius: 2px;
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 9px;
   color: var(--text-2);
   background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
-  transition: border-color 0.1s, color 0.1s, background 0.1s;
+  transition: background 0.1s, color 0.1s;
   white-space: nowrap;
-  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmt-preset:last-child {
+  border-bottom: none;
 }
 
 .cmt-preset:hover {
-  border-color: var(--border-active);
+  background: rgba(255,255,255,0.04);
   color: var(--text-1);
 }
 
 .cmt-preset--active {
-  border-color: var(--accent) !important;
   color: var(--accent) !important;
   background: var(--accent-dim) !important;
 }

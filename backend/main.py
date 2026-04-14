@@ -116,7 +116,6 @@ async def create_job(
             orbit_range_deg=orbit_range_deg,
             camera_zoom=camera_zoom,
             variants_to_render=parsed_variants,
-            component_materials=parsed_component_materials,
         )
     )
 
@@ -258,7 +257,6 @@ async def _run_pipeline(
     orbit_range_deg: float = 40.0,
     camera_zoom: float = 1.0,
     variants_to_render: list[str] | None = None,
-    component_materials: dict[str, str] | None = None,
 ) -> None:
     _variants = variants_to_render or list(VARIANT_NAMES)
     output_dir = UPLOAD_DIR / job_id
