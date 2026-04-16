@@ -1,10 +1,8 @@
-// frontend/src/components/IdleOutput.tsx
-
 export function IdleOutput() {
   return (
-    <div className="idle-output">
+    <div className="idle-output animate-fade-in">
       <div className="idle-grid-bg" />
-      <div className="idle-content animate-fade-in">
+      <div className="idle-content">
         <div className="idle-diagram">
           <div className="idle-ring" />
           <div className="idle-ring-inner" />
@@ -12,12 +10,11 @@ export function IdleOutput() {
             <div className="idle-dot" />
           </div>
         </div>
-        <p className="idle-title">No file loaded</p>
-        <p className="idle-hint">
-          Drop a CAD file on the left or load<br />
-          the sample to generate an exploded<br />
-          view with reference keyframes.
-        </p>
+        <div className="idle-title">Upload a CAD file to begin</div>
+        <div className="idle-hint">
+          Supported formats: GLB, OBJ, STEP, STL<br />
+          Drop a file or click to browse
+        </div>
       </div>
     </div>
   )

@@ -1,0 +1,95 @@
+.ov-root {
+  position: absolute;
+  inset: 0;
+  background: #080808;
+  overflow: hidden;
+}
+
+.ov-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.ov-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+}
+
+.ov-canvas:active {
+  cursor: grabbing;
+}
+
+.ov-hint {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  color: var(--text-3, #888);
+  text-transform: uppercase;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.ov-debug {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  font: 11px/1.35 ui-monospace, monospace;
+  color: #8fe;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 6px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: pre;
+}
+
+.ov-debug--error {
+  color: #ff6b6b;
+  background: rgba(60, 0, 0, 0.8);
+}
+
+.ov-killswitch {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  background: rgba(20, 20, 20, 0.9);
+  color: #ddd;
+  border: 1px solid #333;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.ov-killswitch:hover {
+  background: rgba(40, 40, 40, 0.95);
+  color: #fff;
+}
+
+.ov-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #aaa;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  padding: 20px;
+  text-align: center;
+}

@@ -291,7 +291,7 @@ export default function App() {
                 <section className="panel-section animate-fade-in">
                   <div className="processing-indicator">
                     <div className="processing-dot" />
-                    Rendering pipeline...
+                    Rendering unstyled video...
                   </div>
                 </section>
               )}

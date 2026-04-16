@@ -1,3 +1,5 @@
+// DEPRECATED — replaced by MeshViewer (Three.js orbit for 3D, static preview for other formats).
+// Kept for reference only. Do not import.
 // frontend/src/components/OrientationPicker.tsx
 import type { FaceName } from '../api/client'
 

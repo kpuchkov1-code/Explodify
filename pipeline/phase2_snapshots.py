@@ -265,10 +265,17 @@ class SnapshotRenderer:
         all_verts = np.vstack([m.vertices for m in meshes])
 
         # Camera distance: fit all geometry in frame using the vertical FoV.
-        # Project vertices onto the camera plane (remove depth component) to get
-        # the 2D footprint, then compute the distance required to contain the
-        # footprint's bounding diagonal within the vertical field of view.
-        # PADDING keeps parts away from the frame edges (25% breathing room).
+        # Two constraints are combined with max():
+        #
+        #   (a) FOV fit: distance needed so the 2D footprint (geometry projected
+        #       onto the plane perpendicular to the view axis) fills the frame.
+        #       PADDING keeps parts away from the frame edges (25% breathing room).
+        #
+        #   (b) Depth clearance: distance needed so the camera is outside the
+        #       geometry along the view axis.  Critical for top/bottom views of
+        #       tall objects — without this the camera clips into the model.
+        #       Safety margin is 20% beyond the nearest surface.
+        #
         # camera_zoom < 1.0 pulls the camera further back (zoom out);
         # camera_zoom > 1.0 moves it closer (zoom in).
         PADDING = 1.25
@@ -276,7 +283,15 @@ class SnapshotRenderer:
         depth = all_verts @ orbited
         footprint = all_verts - np.outer(depth, orbited)
         scale = np.linalg.norm(footprint.max(axis=0) - footprint.min(axis=0))
-        cam_dist = (scale / 2.0) / math.tan(half_yfov) * PADDING / max(camera_zoom, 0.1)
+
+        cam_dist_fov = (scale / 2.0) / math.tan(half_yfov) * PADDING
+
+        # Distance from scene centroid to the nearest surface along the view axis.
+        depth_center = float(center @ orbited)
+        near_surface = max(0.0, float(depth.max()) - depth_center)
+        cam_dist_clearance = near_surface * 1.2
+
+        cam_dist = max(cam_dist_fov, cam_dist_clearance) / max(camera_zoom, 0.1)
 
         cam_pos = center + orbited * cam_dist
         cam_pose = _look_at(cam_pos, center)

@@ -55,6 +55,7 @@ export const MeshViewer = forwardRef<MeshViewerHandle, Props>(function MeshViewe
   const [forceStatic] = useState(false)
 
   const dirRef = useRef<Vec3>([0.3, 0.3, 1.0])
+  const [displayDir, setDisplayDir] = useState<Vec3>([0.3, 0.3, 1.0])
 
   useImperativeHandle(ref, () => ({
     getCameraDirection: () => dirRef.current,
@@ -70,6 +71,7 @@ export const MeshViewer = forwardRef<MeshViewerHandle, Props>(function MeshViewe
     const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1
     const dir: Vec3 = [dx / len, dy / len, dz / len]
     dirRef.current = dir
+    setDisplayDir(dir)
     onCameraDirectionChange?.(dir)
   }
   const stableOrientationCb = useRef<(o: Orientation) => void>((o) => {
@@ -130,6 +132,13 @@ export const MeshViewer = forwardRef<MeshViewerHandle, Props>(function MeshViewe
         {explosionAxes && (
           <div className="mesh-axis-vector">
             [{explosionAxes[selectedAxis].map((v) => v.toFixed(2)).join(', ')}]
+          </div>
+        )}
+
+        {/* Camera direction readout — bottom centre */}
+        {show3D && (
+          <div className="mesh-cam-dir-readout">
+            cam [{displayDir.map((v) => v.toFixed(2)).join(', ')}]
           </div>
         )}
 

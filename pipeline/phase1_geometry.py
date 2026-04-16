@@ -62,6 +62,28 @@ class GeometryAnalyzer:
             for nm in named_meshes
         ]
 
+    def axis_directions(self, named_meshes: List[NamedMesh]) -> dict:
+        """Return unit vectors for the longest and shortest bounding-box axes.
+
+        Used by the /preview endpoint to expose axis information to the frontend
+        for the interactive Three.js orientation viewer.
+
+        Returns:
+            Dict with 'longest' and 'shortest' keys, each a [x, y, z] list.
+        """
+        meshes = [nm.mesh for nm in named_meshes]
+        all_verts = np.vstack([m.vertices for m in meshes])
+        extents = all_verts.max(axis=0) - all_verts.min(axis=0)
+        axis_order = np.argsort(extents)
+        shortest_idx = int(axis_order[0])
+        longest_idx = int(axis_order[2])
+
+        unit = np.eye(3)
+        return {
+            "longest": unit[longest_idx].tolist(),
+            "shortest": unit[shortest_idx].tolist(),
+        }
+
     def dual_axis_explosion_vectors(
         self, named_meshes: List[NamedMesh], scalar: float
     ) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray]]:
@@ -78,7 +100,7 @@ class GeometryAnalyzer:
         longest_idx = int(axis_order[2])
 
         assembly_centroid = np.mean([m.centroid for m in meshes], axis=0)
-        boost = 2.5
+        boost = 1.25
 
         def _axis_vectors(axis_idx: int) -> dict[int, np.ndarray]:
             result: dict[int, np.ndarray] = {}

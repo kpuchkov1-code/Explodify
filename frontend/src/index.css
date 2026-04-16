@@ -919,9 +919,10 @@ input[type='range']::-moz-range-thumb {
 /* ─── Right panel ─── */
 .right-panel {
   background: var(--panel-r);
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* ─── Idle output ─── */
@@ -1986,6 +1987,17 @@ input[type='range']::-moz-range-thumb {
   border-color: var(--text-2);
 }
 
+.review-adjust-btn {
+  color: var(--accent);
+  border-color: rgba(212, 168, 67, 0.25);
+}
+
+.review-adjust-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
 .review-actions-ticker {
   display: flex;
   align-items: center;
@@ -2707,4 +2719,385 @@ input[type='range']::-moz-range-thumb {
   color: var(--accent);
   text-transform: uppercase;
   padding: 6px 0;
+}
+
+/* ─── Mesh Viewer ─── */
+.mesh-viewer-panel {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mesh-viewer-canvas-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+/* static fallback image fills the same space */
+.mesh-viewer-canvas-wrap .orient-preview-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* ─── Viewer sliders overlay (bottom-left) ─── */
+.viewer-sliders {
+  position: absolute;
+  bottom: 20px;
+  left: 16px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 190px;
+  padding: 12px 14px;
+  background: rgba(8, 8, 8, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+}
+
+.viewer-slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.viewer-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.viewer-slider-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.viewer-slider-value {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+}
+
+/* Colored range input — filled portion via background gradient */
+.viewer-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  border: none;
+}
+
+.viewer-slider--explode {
+  background: linear-gradient(
+    to right,
+    #f5a623 0%,
+    #f5a623 var(--pct, 50%),
+    rgba(255,255,255,0.12) var(--pct, 50%),
+    rgba(255,255,255,0.12) 100%
+  );
+}
+
+.viewer-slider--orbit {
+  background: linear-gradient(
+    to right,
+    #4a90e2 0%,
+    #4a90e2 var(--pct, 50%),
+    rgba(255,255,255,0.12) var(--pct, 50%),
+    rgba(255,255,255,0.12) 100%
+  );
+}
+
+.viewer-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+.viewer-slider::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+/* ─── Axis overlay (top-right corner) ─── */
+.mesh-viewer-axis-overlay {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mesh-axis-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  background: rgba(12,12,12,0.82);
+  backdrop-filter: blur(8px);
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  cursor: pointer;
+}
+
+.mesh-axis-btn:hover {
+  border-color: rgba(255,255,255,0.25);
+  background: rgba(20,20,20,0.92);
+}
+
+.mesh-axis-btn--active {
+  border-color: var(--accent) !important;
+  background: rgba(12,12,12,0.92) !important;
+}
+
+.mesh-axis-indicator {
+  display: block;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.mesh-axis-btn--longest .mesh-axis-indicator {
+  background: var(--accent);
+}
+
+.mesh-axis-btn--shortest .mesh-axis-indicator {
+  background: var(--text-2);
+}
+
+.mesh-viewer-axis-title {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  padding: 0 2px 4px;
+}
+
+.mesh-axis-name {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--text-1);
+  text-transform: uppercase;
+  display: block;
+}
+
+
+.mesh-axis-vector {
+  position: absolute;
+  bottom: 14px;
+  right: 16px;
+  z-index: 10;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-3);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+
+.mesh-cam-dir-readout {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #00d4ff;
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* ─── EQ Curve editor ─── */
+.eq-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.eq-editor--disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Header: "Preset" label + dropdown */
+.eq-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.eq-header-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+
+.eq-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 1;
+}
+
+/* Trigger button — underline style, matches eq-header aesthetic */
+.eq-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  color: var(--text-1);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  padding: 4px 2px 4px 0;
+  cursor: pointer;
+  outline: none;
+  width: 100%;
+  text-align: left;
+  transition: border-bottom-color 0.12s;
+}
+
+.eq-select:hover     { border-bottom-color: var(--border-active); }
+.eq-select--open     { border-bottom-color: var(--accent) !important; }
+.eq-select:disabled  { opacity: 0.4; cursor: not-allowed; }
+
+.eq-chevron {
+  width: 8px;
+  height: 8px;
+  color: var(--text-3);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.eq-select--open .eq-chevron {
+  transform: rotate(180deg);
+}
+
+/* Dropdown panel — identical treatment to .cmt-presets */
+.eq-dropdown {
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 0;
+  width: 100%;
+  z-index: 200;
+  background: #141414;
+  border: 1px solid var(--border-active);
+  border-top: none;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.65);
+  overflow: hidden;
+}
+
+.eq-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.eq-dropdown-item:last-child { border-bottom: none; }
+
+.eq-dropdown-item:hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--text-1);
+}
+
+.eq-dropdown-item--active {
+  color: var(--accent) !important;
+  background: var(--accent-dim) !important;
+}
+
+/* SVG chart */
+.eq-svg { display: block; overflow: visible; }
+
+.eq-bg   { fill: #0e0e0e; }
+
+.eq-grid-v,
+.eq-grid-h { stroke: #1e1e1e; stroke-width: 1; }
+
+.eq-ref-h { stroke: #2a2a2a; stroke-width: 1; }
+
+.eq-y-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 8px;
+  fill: #444;
+}
+
+.eq-x-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 8px;
+  fill: #444;
+}
+
+.eq-curve {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.eq-dot {
+  fill: #ffffff;
+  filter: drop-shadow(0 1px 4px rgba(0,0,0,0.8));
+}
+
+/* ─── Review gate (simplified single-variant) ─── */
+.review-single-video {
+  padding: 16px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.review-video-full {
+  width: 100%;
+  max-height: calc(100vh - 200px);
+  border-radius: 4px;
+  background: #000;
 }
